@@ -22,6 +22,7 @@ export type AppView =
   | 'purchase_orders'
   | 'inventory_products'
   | 'inventory_stock'
+  | 'warehouse_management'
   | 'finance'
   | 'hrms'
   | 'service'
@@ -215,6 +216,9 @@ const getInitialViewFromPath = (): { view: AppView; filterKey: string | null; se
   if (path === '/inventory' || path === '/stock' || path.endsWith('/inventory')) {
     return { view: 'inventory_stock', filterKey: null };
   }
+  if (path === '/warehouses' || path === '/warehouse-management' || path.endsWith('/warehouses')) {
+    return { view: 'warehouse_management', filterKey: null };
+  }
 
   // Dashboard / Root
   if (path === '/' || path === '/dashboard' || path.endsWith('/dashboard')) {
@@ -297,6 +301,9 @@ const getPathForView = (view: AppView, filterKey?: string | null, settingsTab?: 
       break;
     case 'inventory_stock':
       route = '/inventory';
+      break;
+    case 'warehouse_management':
+      route = '/warehouses';
       break;
     case 'users':
       route = '/users';

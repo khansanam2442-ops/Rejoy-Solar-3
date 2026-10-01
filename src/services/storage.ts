@@ -33,6 +33,8 @@ import {
   SalesInvoice,
   InvoiceLineItem,
   StockMovement,
+  Warehouse,
+  StockAuditRecord,
   UserRole
 } from '../types/solar';
 import { SystemAclConfig, AclAuditLogEntry } from '../types/acl';
@@ -88,7 +90,97 @@ const STORAGE_KEYS = {
   STOCK_MOVEMENTS: 'solar_erp_stock_movements_v2',
   ACL_CONFIG: 'solar_erp_acl_config_v2',
   ACL_AUDIT_LOGS: 'solar_erp_acl_audit_logs_v2',
+  WAREHOUSES: 'solar_erp_warehouses_v2',
+  STOCK_AUDITS: 'solar_erp_stock_audits_v2',
 };
+
+const initialWarehouses: Warehouse[] = [
+  {
+    id: 'wh-1',
+    name: 'Central Solar Logistics Hub - Pune',
+    code: 'WH-PUN-01',
+    address: 'Plot 42, MIDC Bhosari Industrial Area',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411026',
+    contactPerson: 'Rajesh Shinde',
+    contactPhone: '+91 98230 11223',
+    email: 'pune.hub@rejoysolar.com',
+    capacitySqFt: 25000,
+    status: 'ACTIVE',
+    isDefault: true,
+    notes: 'Primary bonded central warehouse stocking Tier-1 modules, string inverters, and heavy aluminium structures.',
+    createdAt: '2026-07-01T08:00:00Z',
+    updatedAt: '2026-09-01T10:00:00Z'
+  },
+  {
+    id: 'wh-2',
+    name: 'North India Distribution Hub - Gurugram',
+    code: 'WH-GGN-02',
+    address: 'Shed 18, Sector 37 Pace City II',
+    city: 'Gurugram',
+    state: 'Haryana',
+    pincode: '122001',
+    contactPerson: 'Vikram Malhotra',
+    contactPhone: '+91 98112 44556',
+    email: 'delhi.depot@rejoysolar.com',
+    capacitySqFt: 18000,
+    status: 'ACTIVE',
+    isDefault: false,
+    notes: 'Regional logistics depot servicing Delhi-NCR, Rajasthan, Punjab, and Uttar Pradesh commercial rooftop sites.',
+    createdAt: '2026-07-15T09:00:00Z',
+    updatedAt: '2026-09-10T11:00:00Z'
+  },
+  {
+    id: 'wh-3',
+    name: 'South Regional Depot - Bengaluru',
+    code: 'WH-BLR-03',
+    address: 'Phase 2, Peenya Industrial Area',
+    city: 'Bengaluru',
+    state: 'Karnataka',
+    pincode: '560058',
+    contactPerson: 'Karthik Subramanian',
+    contactPhone: '+91 98450 77889',
+    email: 'blr.depot@rejoysolar.com',
+    capacitySqFt: 15000,
+    status: 'ACTIVE',
+    isDefault: false,
+    notes: 'Catering to Karnataka and Tamil Nadu industrial ground mounts, DC cabling reels, and switchgear.',
+    createdAt: '2026-08-01T08:30:00Z',
+    updatedAt: '2026-09-15T14:00:00Z'
+  }
+];
+
+const initialStockAudits: StockAuditRecord[] = [
+  {
+    id: 'audit-1',
+    auditNumber: 'AUD-2026-001',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    auditDate: '2026-09-15',
+    auditedBy: 'Sanjay Deshmukh (Quality Auditor)',
+    status: 'COMPLETED',
+    notes: 'Quarterly comprehensive physical verification of solar modules and inverters.',
+    itemsAudited: 12,
+    discrepanciesFound: 1,
+    netAdjustmentValue: -10200,
+    createdAt: '2026-09-15T16:30:00Z'
+  },
+  {
+    id: 'audit-2',
+    auditNumber: 'AUD-2026-002',
+    warehouseId: 'wh-2',
+    warehouseName: 'North India Distribution Hub - Gurugram',
+    auditDate: '2026-09-20',
+    auditedBy: 'Deepak Verma (Store Incharge)',
+    status: 'COMPLETED',
+    notes: 'Biannual hardware count, mounting rails, and DC isolators reconciliation.',
+    itemsAudited: 10,
+    discrepanciesFound: 0,
+    netAdjustmentValue: 0,
+    createdAt: '2026-09-20T17:00:00Z'
+  }
+];
 
 const initialAclAuditLogs: AclAuditLogEntry[] = [
   {
@@ -3837,25 +3929,47 @@ class StorageService {
     this.set(STORAGE_KEYS.PRODUCTS, products);
   }
 
-  adjustStock(productId: string, newQty: number, reason: string, performedBy: string = 'Operations Team'): void {
+  adjustStock(
+    productId: string,
+    newQty: number,
+    reason: string,
+    performedBy: string = 'Operations Team',
+    warehouseId?: string,
+    warehouseName?: string
+  ): void {
     const products = this.getProducts();
     const prod = products.find(p => p.id === productId);
     if (!prod) return;
 
-    const previousQty = prod.currentStock;
-    const diff = newQty - previousQty;
-    prod.currentStock = Math.max(0, newQty);
+    const warehouses = this.getWarehouses();
+    const wh = warehouseId ? warehouses.find(w => w.id === warehouseId) : this.getDefaultWarehouse();
+    const targetWhId = warehouseId || wh?.id || 'wh-1';
+    const targetWhName = warehouseName || wh?.name || 'Central Solar Logistics Hub - Pune';
+
+    prod.warehouseStocks = prod.warehouseStocks || {};
+    const previousWhQty = prod.warehouseStocks[targetWhId] ?? prod.currentStock;
+    const diff = newQty - previousWhQty;
+
+    prod.warehouseStocks[targetWhId] = Math.max(0, newQty);
+    
+    // Total current stock updated
+    const previousTotal = prod.currentStock;
+    prod.currentStock = Math.max(0, previousTotal + diff);
     prod.updatedAt = new Date().toISOString();
     this.set(STORAGE_KEYS.PRODUCTS, products);
+
+    const isAudit = reason.toLowerCase().includes('audit') || reason.toLowerCase().includes('physical');
 
     this.addStockMovement({
       productId: prod.id,
       productName: prod.name,
       sku: prod.sku,
-      movementType: 'ADJUSTMENT',
+      movementType: isAudit ? 'AUDIT_RECONCILIATION' : 'ADJUSTMENT',
       quantity: diff,
       balanceAfter: prod.currentStock,
-      notes: reason || `Inventory count adjustment from ${previousQty} to ${newQty}`,
+      warehouseId: targetWhId,
+      warehouseName: targetWhName,
+      notes: reason || `Inventory count adjustment at ${targetWhName} from ${previousWhQty} to ${newQty}`,
       performedBy
     });
   }
@@ -4068,6 +4182,10 @@ class StorageService {
         const prod = products.find(p => p.id === lineItem.productId || p.sku === lineItem.sku);
         if (prod) {
           prod.currentStock += arrivingQty;
+          if (order.warehouseId) {
+            prod.warehouseStocks = prod.warehouseStocks || {};
+            prod.warehouseStocks[order.warehouseId] = (prod.warehouseStocks[order.warehouseId] || 0) + arrivingQty;
+          }
           prod.updatedAt = new Date().toISOString();
           this.addStockMovement({
             productId: prod.id,
@@ -4076,9 +4194,11 @@ class StorageService {
             movementType: 'PURCHASE_RECEIPT',
             quantity: arrivingQty,
             balanceAfter: prod.currentStock,
+            warehouseId: order.warehouseId,
+            warehouseName: order.warehouseName,
             referenceId: order.id,
             referenceNumber: order.purchaseNumber,
-            notes: `Goods Receipt ${receiptNumber}${receiptInput.deliveryChallanNo ? ' (DC: ' + receiptInput.deliveryChallanNo + ')' : ''} from ${order.vendorName}`,
+            notes: `Goods Receipt ${receiptNumber}${receiptInput.deliveryChallanNo ? ' (DC: ' + receiptInput.deliveryChallanNo + ')' : ''} from ${order.vendorName}${order.warehouseName ? ' into ' + order.warehouseName : ''}`,
             performedBy: performedBy || receiptInput.receivedBy
           });
         }
@@ -4206,6 +4326,10 @@ class StorageService {
       if (prod && item.requiredQty > 0) {
         const alloc = Math.min(item.requiredQty, prod.currentStock);
         prod.currentStock = Math.max(0, prod.currentStock - item.requiredQty);
+        if (bom.warehouseId) {
+          prod.warehouseStocks = prod.warehouseStocks || {};
+          prod.warehouseStocks[bom.warehouseId] = Math.max(0, (prod.warehouseStocks[bom.warehouseId] || prod.currentStock) - item.requiredQty);
+        }
         item.allocatedQty = item.requiredQty;
         item.status = 'ALLOCATED';
         hasUpdatedStock = true;
@@ -4217,9 +4341,11 @@ class StorageService {
           movementType: 'BOM_ALLOCATION',
           quantity: -item.requiredQty,
           balanceAfter: prod.currentStock,
+          warehouseId: bom.warehouseId,
+          warehouseName: bom.warehouseName,
           referenceId: bom.id,
           referenceNumber: bom.bomNumber,
-          notes: `BOM allocation for ${bom.projectTitle} (${bom.customerName})`,
+          notes: `BOM allocation for ${bom.projectTitle} (${bom.customerName})${bom.warehouseName ? ' from ' + bom.warehouseName : ''}`,
           performedBy
         });
       }
@@ -4433,6 +4559,123 @@ class StorageService {
     this.set(STORAGE_KEYS.ACL_AUDIT_LOGS, logs.slice(0, 50));
   }
 
+  // ==========================================
+  // Multi-Warehouse Management
+  // ==========================================
+  getWarehouses(): Warehouse[] {
+    return this.get<Warehouse[]>(STORAGE_KEYS.WAREHOUSES, initialWarehouses);
+  }
+
+  saveWarehouse(warehouse: Warehouse): void {
+    const list = this.getWarehouses();
+    const idx = list.findIndex(w => w.id === warehouse.id);
+    if (warehouse.isDefault) {
+      list.forEach(w => {
+        if (w.id !== warehouse.id) w.isDefault = false;
+      });
+    }
+    if (idx >= 0) {
+      list[idx] = { ...warehouse, updatedAt: new Date().toISOString() };
+    } else {
+      list.push({ ...warehouse, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    }
+    this.set(STORAGE_KEYS.WAREHOUSES, list);
+  }
+
+  deleteWarehouse(id: string): { success: boolean; message?: string } {
+    const list = this.getWarehouses();
+    const target = list.find(w => w.id === id);
+    if (!target) return { success: false, message: 'Warehouse not found' };
+    if (target.isDefault) {
+      return { success: false, message: 'Cannot delete the default warehouse. Please mark another warehouse as default first.' };
+    }
+    const updated = list.filter(w => w.id !== id);
+    this.set(STORAGE_KEYS.WAREHOUSES, updated);
+    return { success: true };
+  }
+
+  getDefaultWarehouse(): Warehouse {
+    const list = this.getWarehouses();
+    return list.find(w => w.isDefault && w.status === 'ACTIVE') || list[0] || initialWarehouses[0];
+  }
+
+  getStockAudits(): StockAuditRecord[] {
+    return this.get<StockAuditRecord[]>(STORAGE_KEYS.STOCK_AUDITS, initialStockAudits);
+  }
+
+  saveStockAudit(audit: StockAuditRecord): void {
+    const list = this.getStockAudits();
+    const idx = list.findIndex(a => a.id === audit.id);
+    if (idx >= 0) {
+      list[idx] = audit;
+    } else {
+      list.unshift(audit);
+    }
+    this.set(STORAGE_KEYS.STOCK_AUDITS, list);
+  }
+
+  transferStock(
+    productId: string,
+    fromWarehouseId: string,
+    toWarehouseId: string,
+    quantity: number,
+    notes: string,
+    performedBy: string = 'Inventory Manager'
+  ): { success: boolean; message?: string } {
+    const products = this.getProducts();
+    const prod = products.find(p => p.id === productId);
+    if (!prod) return { success: false, message: 'Product not found' };
+    if (quantity <= 0) return { success: false, message: 'Transfer quantity must be greater than 0' };
+
+    const warehouses = this.getWarehouses();
+    const fromWh = warehouses.find(w => w.id === fromWarehouseId);
+    const toWh = warehouses.find(w => w.id === toWarehouseId);
+    if (!fromWh || !toWh) return { success: false, message: 'Source or destination warehouse invalid' };
+
+    prod.warehouseStocks = prod.warehouseStocks || {};
+    const currentFromStock = prod.warehouseStocks[fromWarehouseId] ?? prod.currentStock;
+    if (currentFromStock < quantity) {
+      return { success: false, message: `Insufficient stock at ${fromWh.name}. Available: ${currentFromStock} ${prod.unit}` };
+    }
+
+    prod.warehouseStocks[fromWarehouseId] = currentFromStock - quantity;
+    prod.warehouseStocks[toWarehouseId] = (prod.warehouseStocks[toWarehouseId] ?? 0) + quantity;
+    prod.updatedAt = new Date().toISOString();
+    this.set(STORAGE_KEYS.PRODUCTS, products);
+
+    this.addStockMovement({
+      productId: prod.id,
+      productName: prod.name,
+      sku: prod.sku,
+      movementType: 'WAREHOUSE_TRANSFER',
+      quantity: -quantity,
+      balanceAfter: prod.warehouseStocks[fromWarehouseId],
+      warehouseId: fromWarehouseId,
+      warehouseName: fromWh.name,
+      targetWarehouseId: toWarehouseId,
+      targetWarehouseName: toWh.name,
+      notes: notes || `Transferred ${quantity} ${prod.unit} from ${fromWh.name} to ${toWh.name}`,
+      performedBy
+    });
+
+    this.addStockMovement({
+      productId: prod.id,
+      productName: prod.name,
+      sku: prod.sku,
+      movementType: 'WAREHOUSE_TRANSFER',
+      quantity: quantity,
+      balanceAfter: prod.warehouseStocks[toWarehouseId],
+      warehouseId: toWarehouseId,
+      warehouseName: toWh.name,
+      targetWarehouseId: fromWarehouseId,
+      targetWarehouseName: fromWh.name,
+      notes: notes || `Received transfer of ${quantity} ${prod.unit} from ${fromWh.name}`,
+      performedBy
+    });
+
+    return { success: true };
+  }
+
   // Reset demo data to default fresh state
   resetAllData(): void {
     localStorage.removeItem(STORAGE_KEYS.LEADS);
@@ -4458,6 +4701,8 @@ class StorageService {
     localStorage.removeItem(STORAGE_KEYS.STOCK_MOVEMENTS);
     localStorage.removeItem(STORAGE_KEYS.ACL_CONFIG);
     localStorage.removeItem(STORAGE_KEYS.ACL_AUDIT_LOGS);
+    localStorage.removeItem(STORAGE_KEYS.WAREHOUSES);
+    localStorage.removeItem(STORAGE_KEYS.STOCK_AUDITS);
     window.location.reload();
   }
 }

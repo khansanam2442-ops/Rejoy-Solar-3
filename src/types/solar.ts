@@ -670,6 +670,9 @@ export interface ProductItem {
   currentStock: number;
   minStockThreshold: number;
   location: string;
+  warehouseId?: string;
+  warehouseName?: string;
+  warehouseStocks?: Record<string, number>;
   preferredVendorId?: string;
   preferredVendorName?: string;
   createdAt: string;
@@ -785,6 +788,8 @@ export interface PurchaseOrder {
   receivedDate?: string;
   projectId?: string;
   projectTitle?: string;
+  warehouseId?: string;
+  warehouseName?: string;
   items: PurchaseLineItem[];
   subtotal: number;
   taxAmount: number;
@@ -825,6 +830,8 @@ export interface BillOfMaterials {
   customerName: string;
   capacityKw: number;
   version: string;
+  warehouseId?: string;
+  warehouseName?: string;
   items: BOMItem[];
   totalCost: number;
   status: BOMStatus;
@@ -833,6 +840,8 @@ export interface BillOfMaterials {
   approvedAt?: string;
   notes?: string;
   stockAllocated: boolean;
+  ewayBillNumber?: string;
+  ewayBillDate?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -883,6 +892,8 @@ export type StockMovementType =
   | 'BOM_DISPATCH'
   | 'INVOICE_SALE'
   | 'ADJUSTMENT'
+  | 'WAREHOUSE_TRANSFER'
+  | 'AUDIT_RECONCILIATION'
   | 'RETURN';
 
 export interface StockMovement {
@@ -893,11 +904,49 @@ export interface StockMovement {
   movementType: StockMovementType;
   quantity: number; // positive (inflow) or negative (outflow)
   balanceAfter: number;
+  warehouseId?: string;
+  warehouseName?: string;
+  targetWarehouseId?: string;
+  targetWarehouseName?: string;
   referenceId?: string;
   referenceNumber?: string;
   notes?: string;
   timestamp: string;
   performedBy: string;
+}
+
+export interface Warehouse {
+  id: string;
+  name: string;
+  code: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  contactPerson: string;
+  contactPhone: string;
+  email?: string;
+  capacitySqFt?: number;
+  status: 'ACTIVE' | 'INACTIVE';
+  isDefault?: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StockAuditRecord {
+  id: string;
+  auditNumber: string;
+  warehouseId: string;
+  warehouseName: string;
+  auditDate: string;
+  auditedBy: string;
+  status: 'COMPLETED' | 'IN_PROGRESS';
+  notes?: string;
+  itemsAudited: number;
+  discrepanciesFound: number;
+  netAdjustmentValue: number;
+  createdAt: string;
 }
 
 export interface ValidationResult {

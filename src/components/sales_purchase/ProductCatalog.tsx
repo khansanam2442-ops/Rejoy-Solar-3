@@ -40,10 +40,12 @@ export const ProductCatalog: React.FC = () => {
   const [formStock, setFormStock] = useState<number>(0);
   const [formMinThreshold, setFormMinThreshold] = useState<number>(10);
   const [formLocation, setFormLocation] = useState('Warehouse A - Bay 1');
+  const [formWarehouseId, setFormWarehouseId] = useState('');
   const [formVendorId, setFormVendorId] = useState('');
 
   const products = useMemo(() => storageService.getProducts(), [refreshTrigger]);
   const vendors = useMemo(() => storageService.getVendors(), [refreshTrigger]);
+  const warehouses = useMemo(() => storageService.getWarehouses(), [refreshTrigger]);
 
   const categories: ProductItem['category'][] = [
     'Solar Panels',
@@ -84,7 +86,8 @@ export const ProductCatalog: React.FC = () => {
     setFormSellingPrice(0);
     setFormStock(50);
     setFormMinThreshold(10);
-    setFormLocation('Warehouse A');
+    setFormLocation('Warehouse A - Bay 1');
+    setFormWarehouseId(warehouses[0]?.id || 'wh-1');
     setFormVendorId(vendors[0]?.id || '');
     setIsModalOpen(true);
   };
@@ -104,6 +107,7 @@ export const ProductCatalog: React.FC = () => {
     setFormStock(p.currentStock);
     setFormMinThreshold(p.minStockThreshold);
     setFormLocation(p.location);
+    setFormWarehouseId(p.warehouseId || warehouses[0]?.id || 'wh-1');
     setFormVendorId(p.preferredVendorId || '');
     setIsModalOpen(true);
   };
@@ -123,6 +127,7 @@ export const ProductCatalog: React.FC = () => {
     }
 
     const preferredVendor = vendors.find(v => v.id === formVendorId);
+    const selectedWh = warehouses.find(w => w.id === formWarehouseId) || storageService.getDefaultWarehouse();
 
     const productToSave: ProductItem = {
       id: editingProduct ? editingProduct.id : `prod-${Date.now()}`,
@@ -138,6 +143,8 @@ export const ProductCatalog: React.FC = () => {
       currentStock: formStock,
       minStockThreshold: formMinThreshold,
       location: formLocation,
+      warehouseId: selectedWh.id,
+      warehouseName: selectedWh.name,
       preferredVendorId: formVendorId || undefined,
       preferredVendorName: preferredVendor?.name || undefined,
       createdAt: editingProduct ? editingProduct.createdAt : new Date().toISOString(),

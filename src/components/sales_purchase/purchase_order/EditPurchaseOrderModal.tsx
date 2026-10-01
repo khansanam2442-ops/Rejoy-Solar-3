@@ -38,6 +38,7 @@ export const EditPurchaseOrderModal: React.FC<EditPurchaseOrderModalProps> = ({
   // Header state
   const [vendorId, setVendorId] = useState(order.vendorId);
   const [projectId, setProjectId] = useState(order.projectId || '');
+  const [warehouseId, setWarehouseId] = useState(order.warehouseId || '');
   const [purchaseDate, setPurchaseDate] = useState(order.purchaseDate);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(order.expectedDeliveryDate || '');
   const [paymentStatus, setPaymentStatus] = useState(order.paymentStatus);
@@ -237,6 +238,8 @@ export const EditPurchaseOrderModal: React.FC<EditPurchaseOrderModalProps> = ({
 
     const vendor = vendors.find(v => v.id === vendorId);
     const project = projects.find(p => p.id === projectId);
+    const warehouses = storageService.getWarehouses();
+    const selectedWh = warehouses.find(w => w.id === warehouseId) || storageService.getDefaultWarehouse();
 
     const updatedOrder: PurchaseOrder = {
       ...order,
@@ -244,6 +247,8 @@ export const EditPurchaseOrderModal: React.FC<EditPurchaseOrderModalProps> = ({
       vendorName: vendor?.name || order.vendorName,
       projectId: projectId || undefined,
       projectTitle: project?.title || undefined,
+      warehouseId: selectedWh.id,
+      warehouseName: selectedWh.name,
       purchaseDate,
       expectedDeliveryDate: expectedDeliveryDate || undefined,
       paymentStatus,
@@ -321,6 +326,23 @@ export const EditPurchaseOrderModal: React.FC<EditPurchaseOrderModalProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
+                Destination Warehouse *
+              </label>
+              <select
+                value={warehouseId}
+                onChange={e => setWarehouseId(e.target.value)}
+                className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 font-medium"
+              >
+                {storageService.getWarehouses().map(w => (
+                  <option key={w.id} value={w.id}>
+                    {w.name} ({w.code}) {w.isDefault ? '★' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
                 Project Allocation (Optional)
               </label>
               <select
@@ -328,7 +350,7 @@ export const EditPurchaseOrderModal: React.FC<EditPurchaseOrderModalProps> = ({
                 onChange={e => setProjectId(e.target.value)}
                 className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500/20"
               >
-                <option value="">-- Central Warehouse Stock --</option>
+                <option value="">-- General Warehouse Stock --</option>
                 {projects.map(p => (
                   <option key={p.id} value={p.id}>
                     {p.title} ({p.customerName})

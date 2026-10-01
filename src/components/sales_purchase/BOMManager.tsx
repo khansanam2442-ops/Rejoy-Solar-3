@@ -19,8 +19,10 @@ import {
   Building2,
   Sun,
   ShieldCheck,
-  Check
+  Check,
+  Truck
 } from 'lucide-react';
+import { EWayBillModal } from './EWayBillModal';
 
 export const BOMManager: React.FC = () => {
   const { refreshTrigger, triggerRefresh, showToast } = useApp();
@@ -30,9 +32,11 @@ export const BOMManager: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedBOMForView, setSelectedBOMForView] = useState<BillOfMaterials | null>(null);
+  const [selectedBOMForEWayBill, setSelectedBOMForEWayBill] = useState<BillOfMaterials | null>(null);
 
   // Form state for new BOM
   const [formProjectId, setFormProjectId] = useState('');
+  const [formWarehouseId, setFormWarehouseId] = useState('');
   const [formVersion, setFormVersion] = useState('v1.0');
   const [formNotes, setFormNotes] = useState('');
   const [formItems, setFormItems] = useState<Omit<BOMItem, 'id'>[]>([]);
@@ -48,6 +52,7 @@ export const BOMManager: React.FC = () => {
   const boms = useMemo(() => storageService.getBOMs(), [refreshTrigger]);
   const projects = useMemo(() => storageService.getProjects(), [refreshTrigger]);
   const products = useMemo(() => storageService.getProducts(), [refreshTrigger]);
+  const warehouses = useMemo(() => storageService.getWarehouses(), [refreshTrigger]);
 
   const filteredBOMs = useMemo(() => {
     const q = (searchQuery || '').toLowerCase().trim();
@@ -138,6 +143,8 @@ export const BOMManager: React.FC = () => {
 
     const totalCost = formItems.reduce((acc, it) => acc + it.totalCost, 0);
 
+    const selectedWh = warehouses.find(w => w.id === formWarehouseId) || storageService.getDefaultWarehouse();
+
     const newBOM: BillOfMaterials = {
       id: `bom-${Date.now()}`,
       bomNumber: `BOM-${new Date().getFullYear()}-${String(boms.length + 1).padStart(3, '0')}`,
@@ -147,6 +154,8 @@ export const BOMManager: React.FC = () => {
       customerName: project.customerName,
       capacityKw: project.capacityKw || 10,
       version: formVersion.trim() || 'v1.0',
+      warehouseId: selectedWh.id,
+      warehouseName: selectedWh.name,
       status: 'DRAFT',
       stockAllocated: false,
       items: formItems.map((it, idx) => ({
@@ -308,6 +317,15 @@ export const BOMManager: React.FC = () => {
                     <span className="text-[10px] text-slate-400 font-semibold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
                       {bom.version}
                     </span>
+                    {bom.ewayBillNumber && (
+                      <span
+                        className="text-[10px] text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 font-mono flex items-center gap-0.5"
+                        title={`E-Way Bill: ${bom.ewayBillNumber}`}
+                      >
+                        <Truck className="w-2.5 h-2.5 text-indigo-600" />
+                        EWB
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -352,6 +370,15 @@ export const BOMManager: React.FC = () => {
                           Pending Allocation
                         </>
                       )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
+                    <span className="text-slate-500">Source Facility:</span>
+                    <span
+                      className="font-semibold text-slate-700 truncate max-w-[150px]"
+                      title={bom.warehouseName || 'Central Solar Logistics Hub'}
+                    >
+                      {bom.warehouseName || 'Central Solar Logistics Hub'}
                     </span>
                   </div>
                 </div>
@@ -404,6 +431,16 @@ export const BOMManager: React.FC = () => {
                     Release BOM to Site Team
                   </button>
                 )}
+
+                {/* Generate E-Way Bill Button */}
+                <button
+                  onClick={() => setSelectedBOMForEWayBill(bom)}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-lg text-xs font-semibold transition-colors"
+                  title="Generate GST Form EWB-01 for this Bill of Materials"
+                >
+                  <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                  Generate E-Way Bill
+                </button>
 
                 {bom.status === 'DRAFT' && (
                   <button
@@ -503,6 +540,28 @@ export const BOMManager: React.FC = () => {
                     className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                   />
                 </div>
+              </div>
+
+              {/* Sourcing Warehouse Selection */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Sourcing / Allocation Warehouse *
+                </label>
+                <select
+                  value={formWarehouseId}
+                  onChange={e => setFormWarehouseId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                >
+                  <option value="">-- Choose Warehouse (Defaults to Primary Hub) --</option>
+                  {warehouses.map(w => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({w.code}) {w.isDefault ? '— Default Primary Hub' : ''}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  Material stock reservations and logistics dispatches will be allocated from this facility.
+                </span>
               </div>
 
               {/* Line Items Builder Section */}
@@ -710,7 +769,7 @@ export const BOMManager: React.FC = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 bg-slate-50 p-3 rounded-xl text-xs">
               <div>
                 <span className="text-slate-400 block text-[10px]">Client</span>
                 <span className="font-semibold text-slate-800">{selectedBOMForView.customerName}</span>
@@ -720,6 +779,12 @@ export const BOMManager: React.FC = () => {
                 <span className="font-semibold text-slate-800">{selectedBOMForView.capacityKw} kW</span>
               </div>
               <div>
+                <span className="text-slate-400 block text-[10px]">Sourcing Hub</span>
+                <span className="font-semibold text-slate-800 truncate block" title={selectedBOMForView.warehouseName || 'Central Hub'}>
+                  {selectedBOMForView.warehouseName || 'Central Hub'}
+                </span>
+              </div>
+              <div>
                 <span className="text-slate-400 block text-[10px]">Status</span>
                 <span className="font-semibold text-slate-800">{selectedBOMForView.status}</span>
               </div>
@@ -727,6 +792,12 @@ export const BOMManager: React.FC = () => {
                 <span className="text-slate-400 block text-[10px]">Stock Allocated</span>
                 <span className="font-semibold text-slate-800">
                   {selectedBOMForView.stockAllocated ? 'Yes' : 'No'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">E-Way Bill</span>
+                <span className="font-semibold text-indigo-700 font-mono text-[11px] truncate block">
+                  {selectedBOMForView.ewayBillNumber || 'Not Generated'}
                 </span>
               </div>
             </div>
@@ -774,10 +845,24 @@ export const BOMManager: React.FC = () => {
               </span>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-3 pt-2">
               <button
+                type="button"
+                onClick={() => {
+                  const target = selectedBOMForView;
+                  setSelectedBOMForView(null);
+                  setSelectedBOMForEWayBill(target);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
+              >
+                <Truck className="w-3.5 h-3.5" />
+                <span>Generate E-Way Bill</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setSelectedBOMForView(null)}
-                className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-900 transition-colors"
+                className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-900 transition-colors cursor-pointer"
               >
                 Close
               </button>
@@ -785,6 +870,13 @@ export const BOMManager: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal: Generate & View E-Way Bill */}
+      <EWayBillModal
+        isOpen={Boolean(selectedBOMForEWayBill)}
+        onClose={() => setSelectedBOMForEWayBill(null)}
+        bom={selectedBOMForEWayBill}
+      />
     </div>
   );
 };

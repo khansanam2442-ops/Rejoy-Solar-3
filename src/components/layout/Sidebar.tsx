@@ -233,7 +233,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                         'purchase_vendors',
                         'purchase_orders',
                         'inventory_products',
-                        'inventory_stock'
+                        'inventory_stock',
+                        'warehouse_management'
                       ].includes(activeView)
                     )}
                   >
@@ -298,6 +299,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                         className={subNavItemClass(activeView === 'inventory_stock')}
                       >
                         <span>Inventory & Stock</span>
+                      </button>
+                      <button
+                        onClick={() => navigateTo('warehouse_management')}
+                        className={subNavItemClass(activeView === 'warehouse_management')}
+                      >
+                        <span>Warehouse Management</span>
                       </button>
                     </div>
                   )}

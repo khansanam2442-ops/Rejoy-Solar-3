@@ -279,12 +279,13 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
           {/* Instructions banner */}
           <div className="bg-blue-50/80 border border-blue-200/80 rounded-xl p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
             <PackageCheck className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-            <div>
-              <p className="font-semibold">Partial Delivery & Inventory Inflow Rules:</p>
-              <p className="text-blue-700 mt-0.5 leading-relaxed">
+            <div className="space-y-1">
+              <p className="font-semibold">
+                Receiving into: <span className="text-amber-800 font-bold">{order.warehouseName || 'Central Solar Logistics Hub'}</span>
+              </p>
+              <p className="text-blue-700 leading-relaxed">
                 Warehouse inventory increases <strong>only</strong> for the quantities confirmed arriving in this delivery batch.
                 Enter <span className="font-mono font-bold">0</span> for products that have not arrived yet. Remaining units stay pending for future dispatches.
-                Deliveries exceeding ordered pending quantities require explicit manager authorization.
               </p>
             </div>
           </div>

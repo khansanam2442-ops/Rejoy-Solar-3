@@ -6,6 +6,7 @@ import { VendorManager } from '../sales_purchase/VendorManager';
 import { PurchaseOrderEntry } from '../sales_purchase/PurchaseOrderEntry';
 import { ProductCatalog } from '../sales_purchase/ProductCatalog';
 import { InventoryStockManager } from '../sales_purchase/InventoryStockManager';
+import { WarehouseManager } from '../sales_purchase/WarehouseManager';
 import {
   Layers,
   FileText,
@@ -16,10 +17,11 @@ import {
   ArrowRightLeft,
   TrendingUp,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  Warehouse as WarehouseIcon
 } from 'lucide-react';
 
-type MainSection = 'SALES' | 'PURCHASE' | 'INVENTORY';
+type MainSection = 'SALES' | 'PURCHASE' | 'INVENTORY' | 'WAREHOUSE';
 
 export const SalesPurchaseView: React.FC = () => {
   const { activeView, setActiveView } = useApp();
@@ -49,6 +51,8 @@ export const SalesPurchaseView: React.FC = () => {
     } else if (activeView === 'inventory_stock') {
       setActiveSection('INVENTORY');
       setInventorySubTab('STOCK');
+    } else if (activeView === 'warehouse_management') {
+      setActiveSection('WAREHOUSE');
     }
   }, [activeView]);
 
@@ -78,8 +82,8 @@ export const SalesPurchaseView: React.FC = () => {
           </div>
         </div>
 
-        {/* 3 Main Functional Area Tabs */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-6 pt-5 border-t border-slate-100">
+        {/* 4 Main Functional Area Tabs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-6 pt-5 border-t border-slate-100">
           <button
             id="tab-sales-section"
             onClick={() => {
@@ -125,7 +129,23 @@ export const SalesPurchaseView: React.FC = () => {
             }`}
           >
             <Boxes className="w-4 h-4" />
-            3. Products & Inventory
+            3. Products & Stock
+          </button>
+
+          <button
+            id="tab-warehouse-section"
+            onClick={() => {
+              setActiveSection('WAREHOUSE');
+              setActiveView('warehouse_management');
+            }}
+            className={`flex items-center justify-center gap-2.5 p-3.5 rounded-xl font-bold text-sm transition-all ${
+              activeSection === 'WAREHOUSE'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/60'
+            }`}
+          >
+            <WarehouseIcon className="w-4 h-4" />
+            4. Warehouse Management
           </button>
         </div>
       </div>
@@ -241,6 +261,13 @@ export const SalesPurchaseView: React.FC = () => {
           </div>
 
           {inventorySubTab === 'STOCK' ? <InventoryStockManager /> : <ProductCatalog />}
+        </div>
+      )}
+
+      {/* Area 4: WAREHOUSE MANAGEMENT */}
+      {activeSection === 'WAREHOUSE' && (
+        <div className="space-y-6">
+          <WarehouseManager />
         </div>
       )}
     </div>

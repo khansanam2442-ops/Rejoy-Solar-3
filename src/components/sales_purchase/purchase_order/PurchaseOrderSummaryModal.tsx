@@ -98,11 +98,14 @@ export const PurchaseOrderSummaryModal: React.FC<PurchaseOrderSummaryModalProps>
             </div>
 
             <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70">
-              <span className="text-slate-400 text-[10px] uppercase font-bold block">Project Allocation</span>
+              <span className="text-slate-400 text-[10px] uppercase font-bold block">Allocation & Hub</span>
               <span className="font-semibold text-slate-800 block mt-0.5">
-                {order.projectTitle || <span className="text-slate-500 italic">Central Warehouse Stock</span>}
+                {order.projectTitle || <span className="text-slate-700">General Stock</span>}
               </span>
-              <span className="text-slate-400 text-[11px] block mt-1">PO Date: {order.purchaseDate}</span>
+              <span className="text-amber-800 font-semibold text-[11px] block mt-0.5 truncate" title={order.warehouseName || 'Central Hub'}>
+                Hub: {order.warehouseName || 'Central Solar Logistics Hub'}
+              </span>
+              <span className="text-slate-400 text-[11px] block mt-0.5">PO Date: {order.purchaseDate}</span>
             </div>
 
             <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70">

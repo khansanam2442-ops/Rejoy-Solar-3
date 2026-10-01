@@ -92,6 +92,7 @@ const MainLayout: React.FC = () => {
       case 'purchase_orders':
       case 'inventory_products':
       case 'inventory_stock':
+      case 'warehouse_management':
         return <SalesPurchaseView />;
       default:
         return <DashboardView />;

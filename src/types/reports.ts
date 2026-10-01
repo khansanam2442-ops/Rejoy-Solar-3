@@ -16,6 +16,7 @@ export interface ReportFilterState {
   toDate: string;
   name: string;
   status: string;
+  warehouseId?: string;
 }
 
 export interface ReportCategoryMeta {
