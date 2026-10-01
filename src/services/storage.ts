@@ -1911,6 +1911,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 350,
     minStockThreshold: 80,
     location: 'Warehouse A - Bay 1',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 220,
+      'wh-2': 90,
+      'wh-3': 40
+    },
     preferredVendorId: 'vnd-1',
     preferredVendorName: 'Waaree Energies Limited',
     createdAt: '2026-08-01T09:00:00Z',
@@ -1930,6 +1937,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 220,
     minStockThreshold: 60,
     location: 'Warehouse A - Bay 2',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 140,
+      'wh-2': 50,
+      'wh-3': 30
+    },
     preferredVendorId: 'vnd-1',
     preferredVendorName: 'Waaree Energies Limited',
     createdAt: '2026-08-01T09:00:00Z',
@@ -1949,6 +1963,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 5,
     minStockThreshold: 2,
     location: 'Warehouse B - Secure Rack 1',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 3,
+      'wh-2': 1,
+      'wh-3': 1
+    },
     preferredVendorId: 'vnd-2',
     preferredVendorName: 'Sungrow Power Supply India Pvt Ltd',
     createdAt: '2026-08-02T10:00:00Z',
@@ -1968,6 +1989,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 8,
     minStockThreshold: 2,
     location: 'Warehouse B - Secure Rack 2',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 4,
+      'wh-2': 2,
+      'wh-3': 2
+    },
     preferredVendorId: 'vnd-2',
     preferredVendorName: 'Sungrow Power Supply India Pvt Ltd',
     createdAt: '2026-08-02T10:00:00Z',
@@ -1987,6 +2015,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 140,
     minStockThreshold: 40,
     location: 'Yard 1 - Heavy Steel',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 90,
+      'wh-2': 30,
+      'wh-3': 20
+    },
     preferredVendorId: 'vnd-3',
     preferredVendorName: 'Jindal Aluminium & Steel Works',
     createdAt: '2026-08-03T09:30:00Z',
@@ -2006,6 +2041,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 1800,
     minStockThreshold: 400,
     location: 'Warehouse C - Cable Reel 1',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 1000,
+      'wh-2': 500,
+      'wh-3': 300
+    },
     preferredVendorId: 'vnd-4',
     preferredVendorName: 'Polycab India Limited',
     createdAt: '2026-08-04T11:00:00Z',
@@ -2025,6 +2067,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 1750,
     minStockThreshold: 400,
     location: 'Warehouse C - Cable Reel 2',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 1000,
+      'wh-2': 450,
+      'wh-3': 300
+    },
     preferredVendorId: 'vnd-4',
     preferredVendorName: 'Polycab India Limited',
     createdAt: '2026-08-04T11:00:00Z',
@@ -2044,6 +2093,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 480,
     minStockThreshold: 150,
     location: 'Warehouse C - Heavy Drums',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 280,
+      'wh-2': 120,
+      'wh-3': 80
+    },
     preferredVendorId: 'vnd-4',
     preferredVendorName: 'Polycab India Limited',
     createdAt: '2026-08-04T11:00:00Z',
@@ -2063,6 +2119,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 35,
     minStockThreshold: 10,
     location: 'Warehouse A - Bay 5',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 20,
+      'wh-2': 10,
+      'wh-3': 5
+    },
     preferredVendorId: 'vnd-5',
     preferredVendorName: 'Truepower Earthings & Lightning Systems',
     createdAt: '2026-08-05T14:00:00Z',
@@ -2082,6 +2145,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 9,
     minStockThreshold: 3,
     location: 'Warehouse B - Shelf 3',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 5,
+      'wh-2': 2,
+      'wh-3': 2
+    },
     preferredVendorId: 'vnd-5',
     preferredVendorName: 'Truepower Earthings & Lightning Systems',
     createdAt: '2026-08-05T14:00:00Z',
@@ -2101,6 +2171,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 6,
     minStockThreshold: 2,
     location: 'Warehouse B - Shelf 1',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 3,
+      'wh-2': 2,
+      'wh-3': 1
+    },
     preferredVendorId: 'vnd-4',
     preferredVendorName: 'Polycab India Limited',
     createdAt: '2026-08-06T12:00:00Z',
@@ -2120,6 +2197,13 @@ const initialProducts: ProductItem[] = [
     currentStock: 65,
     minStockThreshold: 20,
     location: 'Warehouse A - Bin 12',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
+    warehouseStocks: {
+      'wh-1': 40,
+      'wh-2': 15,
+      'wh-3': 10
+    },
     preferredVendorId: 'vnd-3',
     preferredVendorName: 'Jindal Aluminium & Steel Works',
     createdAt: '2026-08-06T12:00:00Z',
@@ -2256,6 +2340,8 @@ const initialPurchaseOrders: PurchaseOrder[] = [
     receivedDate: '2026-08-18',
     projectId: 'proj-1',
     projectTitle: '100 kW Rooftop Solar Plant - ABC Industries',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
     items: [
       {
         id: 'poi-1',
@@ -2320,6 +2406,8 @@ const initialPurchaseOrders: PurchaseOrder[] = [
     receivedDate: '2026-08-20',
     projectId: 'proj-1',
     projectTitle: '100 kW Rooftop Solar Plant - ABC Industries',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
     items: [
       {
         id: 'poi-2',
@@ -2383,6 +2471,8 @@ const initialPurchaseOrders: PurchaseOrder[] = [
     expectedDeliveryDate: '2026-09-22',
     projectId: 'proj-2',
     projectTitle: '50 kW Solar PV Project - Sunrise Textiles',
+    warehouseId: 'wh-2',
+    warehouseName: 'North India Distribution Hub - Gurugram',
     items: [
       {
         id: 'poi-3',
@@ -2427,7 +2517,7 @@ const initialPurchaseOrders: PurchaseOrder[] = [
     status: 'ORDERED',
     paymentStatus: 'PARTIALLY_PAID',
     paymentDueDate: '2026-10-05',
-    notes: 'Delivery expected at central warehouse for string distribution.',
+    notes: 'Delivery expected at regional warehouse for string distribution.',
     stockUpdated: false,
     deliveryReceipts: [],
     createdAt: '2026-09-05T14:00:00Z',
@@ -2442,6 +2532,8 @@ const initialPurchaseOrders: PurchaseOrder[] = [
     expectedDeliveryDate: '2026-09-25',
     projectId: 'proj-2',
     projectTitle: '50 kW Solar PV Project - Sunrise Textiles',
+    warehouseId: 'wh-3',
+    warehouseName: 'South Regional Depot - Bengaluru',
     items: [
       {
         id: 'poi-5',
@@ -2509,6 +2601,8 @@ const initialBOMs: BillOfMaterials[] = [
     customerName: 'ABC Industries Ltd.',
     capacityKw: 100,
     version: 'v1.2',
+    warehouseId: 'wh-1',
+    warehouseName: 'Central Solar Logistics Hub - Pune',
     status: 'APPROVED',
     stockAllocated: true,
     createdBy: 'Amit Sharma',

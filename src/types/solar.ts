@@ -495,6 +495,13 @@ export interface AttendanceRecord {
   siteProjectId?: string;
   siteProjectTitle?: string;
   status: 'PRESENT' | 'LATE' | 'HALF DAY' | 'FIELD VISIT' | 'ABSENT';
+  totalHours?: number;
+  totalDurationText?: string;
+  checkOutGps?: string | {
+    latitude: number;
+    longitude: number;
+    locationName: string;
+  };
 }
 
 export interface AdditionalExpenseItem {

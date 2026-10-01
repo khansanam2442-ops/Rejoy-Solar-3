@@ -374,6 +374,15 @@ export const ACL_PERMISSIONS_CATALOG: AclPermissionDefinition[] = [
     actions: ['create', 'approve'],
     riskLevel: 'HIGH'
   },
+  {
+    id: 'inventory.warehouses_manage',
+    domain: 'inventory',
+    domainLabel: 'Material & Inventory',
+    name: 'Manage Multi-Warehouse Facilities',
+    description: 'Create, edit, decommission warehouse facilities, manage storage capacity, and execute physical audits',
+    actions: ['create', 'edit', 'delete'],
+    riskLevel: 'HIGH'
+  },
 
   // Finance & Accounting
   {

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { storageService } from '../../services/storage';
+import { TodayAttendanceCard } from '../hrms/TodayAttendanceCard';
 import {
   Wrench,
   AlertTriangle,
@@ -65,6 +66,9 @@ export const ServiceDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Today's Attendance Punch Card */}
+      <TodayAttendanceCard />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

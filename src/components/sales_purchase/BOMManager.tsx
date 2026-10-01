@@ -589,11 +589,16 @@ export const BOMManager: React.FC = () => {
                       className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg"
                     >
                       <option value="">-- Pick from Inventory Catalog --</option>
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.sku} - {p.name} (Stock: {p.currentStock} {p.unit})
-                        </option>
-                      ))}
+                      {products.map(p => {
+                        const whStock = formWarehouseId
+                          ? (p.warehouseStocks?.[formWarehouseId] ?? (warehouses.find(w => w.id === formWarehouseId)?.isDefault ? p.currentStock : 0))
+                          : p.currentStock;
+                        return (
+                          <option key={p.id} value={p.id}>
+                            {p.sku} - {p.name} ({formWarehouseId ? `Facility Stock: ${whStock} ${p.unit} | Total: ${p.currentStock}` : `Stock: ${p.currentStock} ${p.unit}`})
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
@@ -621,6 +626,23 @@ export const BOMManager: React.FC = () => {
                     </button>
                   </div>
                 </div>
+
+                {selectedProductId && (() => {
+                  const selProd = products.find(p => p.id === selectedProductId);
+                  const selWh = warehouses.find(w => w.id === formWarehouseId);
+                  const whStock = formWarehouseId && selProd
+                    ? (selProd.warehouseStocks?.[formWarehouseId] ?? (selWh?.isDefault ? selProd.currentStock : 0))
+                    : selProd?.currentStock;
+                  return selProd ? (
+                    <div className="flex items-center gap-2 text-[11px] bg-amber-50/70 border border-amber-200/60 p-2 rounded-lg text-amber-900">
+                      <span className="font-semibold">Warehouse Availability:</span>
+                      <span>
+                        {selWh ? selWh.name : 'Primary Logistics Hub'}: <strong>{whStock ?? 0} {selProd.unit}</strong> on-hand
+                        {formWarehouseId && <span className="text-slate-500 ml-1.5">(Total across all warehouses: {selProd.currentStock} {selProd.unit})</span>}
+                      </span>
+                    </div>
+                  ) : null;
+                })()}
 
                 {lineItemError && (
                   <p className="text-[11px] text-red-600 font-medium bg-red-50 p-2 rounded-lg border border-red-200">

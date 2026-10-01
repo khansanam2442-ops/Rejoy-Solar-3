@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { storageService } from '../../services/storage';
+import { TodayAttendanceCard } from '../hrms/TodayAttendanceCard';
 import {
   Layers,
   AlertTriangle,
@@ -81,6 +82,9 @@ export const ProjectDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Today's Attendance Punch Card */}
+      <TodayAttendanceCard />
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

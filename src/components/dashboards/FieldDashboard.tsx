@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { storageService } from '../../services/storage';
 import { FieldLocationSharer } from '../tracking/FieldLocationSharer';
+import { TodayAttendanceCard } from '../hrms/TodayAttendanceCard';
 import {
   Navigation,
   MapPin,
@@ -101,6 +102,9 @@ export const FieldDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Today's Attendance Card */}
+      <TodayAttendanceCard />
 
       {/* Field Worker GPS Live Telemetry Broadcaster */}
       <FieldLocationSharer />

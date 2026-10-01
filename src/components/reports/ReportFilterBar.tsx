@@ -1,6 +1,7 @@
 import React from 'react';
-import { Search, Calendar, Filter, RotateCcw, Download, Printer, X } from 'lucide-react';
+import { Search, Calendar, Filter, RotateCcw, Download, Printer, X, Warehouse as WarehouseIcon } from 'lucide-react';
 import { ReportCategoryMeta, ReportFilterState } from '../../types/reports';
+import { Warehouse } from '../../types/solar';
 
 interface ReportFilterBarProps {
   filters: ReportFilterState;
@@ -14,6 +15,8 @@ interface ReportFilterBarProps {
   hideDate?: boolean;
   hideName?: boolean;
   hideStatus?: boolean;
+  showWarehouseFilter?: boolean;
+  warehouses?: Warehouse[];
 }
 
 export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
@@ -27,13 +30,16 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
   filteredCount,
   hideDate = false,
   hideName = false,
-  hideStatus = false
+  hideStatus = false,
+  showWarehouseFilter = false,
+  warehouses = []
 }) => {
   const isFiltered = Boolean(
     filters.fromDate ||
     filters.toDate ||
     filters.name.trim() ||
-    (filters.status && filters.status !== 'ALL')
+    (filters.status && filters.status !== 'ALL') ||
+    (filters.warehouseId && filters.warehouseId !== 'ALL')
   );
 
   const setPreset = (type: 'all' | 'this_month' | 'last_30' | 'this_quarter' | 'this_year') => {
@@ -126,10 +132,11 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
       </div>
 
       {/* Main Filter Controls Grid */}
+      {/* Filter Inputs Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
         {/* Date Range: From Date & To Date */}
         {!hideDate && (
-          <div className="lg:col-span-5 grid grid-cols-2 gap-2">
+          <div className={`${showWarehouseFilter ? 'lg:col-span-4' : 'lg:col-span-5'} grid grid-cols-2 gap-2`}>
             <div>
               <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
                 <Calendar className="w-3 h-3 text-slate-400" />
@@ -159,7 +166,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
 
         {/* Name / Keyword Search Filter */}
         {!hideName && (
-          <div className={!hideDate && !hideStatus ? 'lg:col-span-4' : 'lg:col-span-6'}>
+          <div className={showWarehouseFilter ? 'lg:col-span-3' : (!hideDate && !hideStatus ? 'lg:col-span-4' : 'lg:col-span-6')}>
             <label className="block text-[11px] font-bold text-slate-600 mb-1">
               {categoryMeta.nameFilterLabel}
             </label>
@@ -176,7 +183,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
                 <button
                   type="button"
                   onClick={() => onChange({ name: '' })}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -187,18 +194,40 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
 
         {/* Status Filter */}
         {!hideStatus && (
-          <div className={!hideDate && !hideName ? 'lg:col-span-3' : 'lg:col-span-6'}>
+          <div className={showWarehouseFilter ? 'lg:col-span-2' : (!hideDate && !hideName ? 'lg:col-span-3' : 'lg:col-span-6')}>
             <label className="block text-[11px] font-bold text-slate-600 mb-1">
               Status Filter
             </label>
             <select
               value={filters.status || 'ALL'}
               onChange={e => onChange({ status: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all cursor-pointer"
             >
               {categoryMeta.statusOptions.map(opt => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Warehouse Filter */}
+        {showWarehouseFilter && warehouses && warehouses.length > 0 && (
+          <div className="lg:col-span-3">
+            <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+              <WarehouseIcon className="w-3 h-3 text-amber-600" />
+              <span>Warehouse Hub</span>
+            </label>
+            <select
+              value={filters.warehouseId || 'ALL'}
+              onChange={e => onChange({ warehouseId: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all cursor-pointer"
+            >
+              <option value="ALL">All Facilities (Global)</option>
+              {warehouses.map(w => (
+                <option key={w.id} value={w.id}>
+                  {w.name} {w.isDefault ? '★' : ''}
                 </option>
               ))}
             </select>
@@ -287,7 +316,15 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
           {filters.status && filters.status !== 'ALL' && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 rounded-md text-[11px] font-medium">
               Status: {categoryMeta.statusOptions.find(o => o.value === filters.status)?.label || filters.status}
-              <button onClick={() => onChange({ status: 'ALL' })} className="hover:text-purple-950">
+              <button onClick={() => onChange({ status: 'ALL' })} className="hover:text-purple-950 cursor-pointer">
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </span>
+          )}
+          {filters.warehouseId && filters.warehouseId !== 'ALL' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-900 border border-amber-300 rounded-md text-[11px] font-medium">
+              Facility: {warehouses?.find(w => w.id === filters.warehouseId)?.name || filters.warehouseId}
+              <button onClick={() => onChange({ warehouseId: 'ALL' })} className="hover:text-amber-950 cursor-pointer">
                 <X className="w-2.5 h-2.5" />
               </button>
             </span>

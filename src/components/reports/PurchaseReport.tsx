@@ -2,8 +2,9 @@ import React, { useMemo } from 'react';
 import { PurchaseOrder } from '../../types/solar';
 import { ReportFilterState, ReportCategoryMeta } from '../../types/reports';
 import { exportToCSV } from '../../services/exportImport';
+import { storageService } from '../../services/storage';
 import { ReportFilterBar } from './ReportFilterBar';
-import { ShoppingCart, PackageCheck, Clock, Percent, Building2 } from 'lucide-react';
+import { ShoppingCart, PackageCheck, Clock, Percent, Building2, Warehouse as WarehouseIcon } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -31,6 +32,8 @@ export const PurchaseReport: React.FC<PurchaseReportProps> = ({
   meta,
   showToast
 }) => {
+  const warehouses = useMemo(() => storageService.getWarehouses(), []);
+
   const filteredOrders = useMemo(() => {
     return orders.filter(po => {
       // Date filter
@@ -43,7 +46,13 @@ export const PurchaseReport: React.FC<PurchaseReportProps> = ({
         const matchesVendor = po.vendorName.toLowerCase().includes(query);
         const matchesNumber = po.purchaseNumber.toLowerCase().includes(query);
         const matchesProject = (po.projectTitle || '').toLowerCase().includes(query);
-        if (!matchesVendor && !matchesNumber && !matchesProject) return false;
+        const matchesWarehouse = (po.warehouseName || '').toLowerCase().includes(query);
+        if (!matchesVendor && !matchesNumber && !matchesProject && !matchesWarehouse) return false;
+      }
+
+      // Warehouse facility filter
+      if (filters.warehouseId && filters.warehouseId !== 'ALL') {
+        if (po.warehouseId !== filters.warehouseId) return false;
       }
 
       // Status filter
@@ -78,7 +87,8 @@ export const PurchaseReport: React.FC<PurchaseReportProps> = ({
       'PO Number',
       'Order Date',
       'Vendor Name',
-      'Project Title',
+      'Destination Warehouse',
+      'Linked Project',
       'Item Count',
       'Subtotal (INR)',
       'GST Tax (INR)',
@@ -91,6 +101,7 @@ export const PurchaseReport: React.FC<PurchaseReportProps> = ({
       po.purchaseNumber,
       po.purchaseDate,
       po.vendorName,
+      po.warehouseName || 'Central Solar Logistics Hub',
       po.projectTitle || 'General Inventory',
       po.items ? po.items.length : 0,
       po.subtotal,
@@ -132,6 +143,8 @@ export const PurchaseReport: React.FC<PurchaseReportProps> = ({
         categoryMeta={meta}
         totalCount={orders.length}
         filteredCount={filteredOrders.length}
+        showWarehouseFilter={true}
+        warehouses={warehouses}
       />
 
       {/* KPI Cards */}
@@ -235,7 +248,7 @@ export const PurchaseReport: React.FC<PurchaseReportProps> = ({
                 <th className="py-3 px-4">PO #</th>
                 <th className="py-3 px-4">Date</th>
                 <th className="py-3 px-4">Vendor Name</th>
-                <th className="py-3 px-4">Project / Destination</th>
+                <th className="py-3 px-4">Destination Facility</th>
                 <th className="py-3 px-4 text-center">Items</th>
                 <th className="py-3 px-4 text-right">Subtotal</th>
                 <th className="py-3 px-4 text-right">GST (Tax)</th>
@@ -261,8 +274,16 @@ export const PurchaseReport: React.FC<PurchaseReportProps> = ({
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap text-slate-600">{po.purchaseDate}</td>
                     <td className="py-3.5 px-4 font-medium text-slate-900">{po.vendorName}</td>
-                    <td className="py-3.5 px-4 text-slate-600 truncate max-w-[160px]">
-                      {po.projectTitle || 'Central Warehouse'}
+                    <td className="py-3.5 px-4 text-slate-700">
+                      <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                        <WarehouseIcon className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>{po.warehouseName || 'Central Solar Logistics Hub'}</span>
+                      </div>
+                      {po.projectTitle && (
+                        <span className="block text-[10px] text-slate-400 truncate max-w-[160px]">
+                          Proj: {po.projectTitle}
+                        </span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-center font-semibold text-slate-700">
                       {po.items ? po.items.length : 0}

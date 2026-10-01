@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { storageService } from '../../services/storage';
-import { ProductItem, StockMovement } from '../../types/solar';
+import { ProductItem, StockMovement, Warehouse } from '../../types/solar';
 import {
   Boxes,
   Search,
@@ -17,7 +17,10 @@ import {
   Package,
   Layers,
   FileText,
-  DollarSign
+  DollarSign,
+  Warehouse as WarehouseIcon,
+  ArrowRightLeft,
+  Building2
 } from 'lucide-react';
 
 export const InventoryStockManager: React.FC = () => {
@@ -25,26 +28,62 @@ export const InventoryStockManager: React.FC = () => {
   const { currentUser } = useAuth();
 
   const [activeSubTab, setActiveSubTab] = useState<'LEVELS' | 'MOVEMENTS'>('LEVELS');
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [movementFilter, setMovementFilter] = useState<string>('ALL');
+  const [movementWarehouseFilter, setMovementWarehouseFilter] = useState<string>('ALL');
 
   // Modal for Stock Adjustment
   const [adjustingProduct, setAdjustingProduct] = useState<ProductItem | null>(null);
+  const [adjustWarehouseId, setAdjustWarehouseId] = useState<string>('');
   const [newCount, setNewCount] = useState<number>(0);
   const [adjustReason, setAdjustReason] = useState('Quarterly Physical Count Audit');
 
+  // Modal for Inter-Warehouse Transfer
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferProductId, setTransferProductId] = useState('');
+  const [transferFromWhId, setTransferFromWhId] = useState('');
+  const [transferToWhId, setTransferToWhId] = useState('');
+  const [transferQty, setTransferQty] = useState<number>(1);
+  const [transferNotes, setTransferNotes] = useState('');
+  const [transferError, setTransferError] = useState('');
+
   const products = useMemo(() => storageService.getProducts(), [refreshTrigger]);
   const movements = useMemo(() => storageService.getStockMovements(), [refreshTrigger]);
+  const warehouses = useMemo(() => storageService.getWarehouses(), [refreshTrigger]);
+  const defaultWarehouse = useMemo(() => storageService.getDefaultWarehouse(), [warehouses]);
+
+  // Helper to get stock for a specific warehouse
+  const getProductStockInWarehouse = (p: ProductItem, whId: string) => {
+    if (whId === 'ALL') return p.currentStock;
+    const targetWh = warehouses.find(w => w.id === whId);
+    if (p.warehouseStocks && p.warehouseStocks[whId] !== undefined) {
+      return p.warehouseStocks[whId];
+    }
+    // Fallback if no explicit breakdown exists yet: default warehouse holds the balance
+    return targetWh?.isDefault ? p.currentStock : 0;
+  };
 
   // Inventory valuation & health metrics
   const inventoryMetrics = useMemo(() => {
-    const totalValuation = products.reduce((acc, p) => acc + p.currentStock * p.unitPrice, 0);
-    const totalUnits = products.reduce((acc, p) => acc + p.currentStock, 0);
-    const lowStockCount = products.filter(p => p.currentStock <= p.minStockThreshold).length;
-    const outOfStockCount = products.filter(p => p.currentStock === 0).length;
+    let totalValuation = 0;
+    let totalUnits = 0;
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
+
+    products.forEach(p => {
+      const stock = getProductStockInWarehouse(p, selectedWarehouseId);
+      totalUnits += stock;
+      totalValuation += stock * (p.unitPrice || 0);
+      if (stock === 0) {
+        outOfStockCount++;
+      } else if (stock <= p.minStockThreshold) {
+        lowStockCount++;
+      }
+    });
 
     return { totalValuation, totalUnits, lowStockCount, outOfStockCount };
-  }, [products]);
+  }, [products, selectedWarehouseId, warehouses]);
 
   const filteredProducts = useMemo(() => {
     const q = (searchQuery || '').toLowerCase().trim();
@@ -70,29 +109,107 @@ export const InventoryStockManager: React.FC = () => {
         (m.sku || '').toLowerCase().includes(q) ||
         (m.referenceNumber && (m.referenceNumber || '').toLowerCase().includes(q));
       const matchesType = movementFilter === 'ALL' || m.movementType === movementFilter;
-      return matchesSearch && matchesType;
+      const matchesWarehouse =
+        movementWarehouseFilter === 'ALL' ||
+        m.warehouseId === movementWarehouseFilter ||
+        m.targetWarehouseId === movementWarehouseFilter;
+      return matchesSearch && matchesType && matchesWarehouse;
     });
-  }, [movements, searchQuery, movementFilter]);
+  }, [movements, searchQuery, movementFilter, movementWarehouseFilter]);
 
   const handleOpenAdjust = (p: ProductItem) => {
+    const initialWhId = selectedWarehouseId !== 'ALL' ? selectedWarehouseId : (defaultWarehouse?.id || warehouses[0]?.id || '');
     setAdjustingProduct(p);
-    setNewCount(p.currentStock);
+    setAdjustWarehouseId(initialWhId);
+    setNewCount(getProductStockInWarehouse(p, initialWhId));
     setAdjustReason('Physical Inventory Audit');
+  };
+
+  const handleAdjustWarehouseChange = (whId: string) => {
+    setAdjustWarehouseId(whId);
+    if (adjustingProduct) {
+      setNewCount(getProductStockInWarehouse(adjustingProduct, whId));
+    }
   };
 
   const handleSaveAdjustment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!adjustingProduct) return;
 
+    const targetWh = warehouses.find(w => w.id === adjustWarehouseId) || defaultWarehouse;
+
     storageService.adjustStock(
       adjustingProduct.id,
       newCount,
       adjustReason,
-      currentUser?.name || 'Operations Supervisor'
+      currentUser?.name || 'Operations Supervisor',
+      targetWh.id,
+      targetWh.name
     );
     triggerRefresh();
-    showToast(`Inventory count updated for ${adjustingProduct.sku}`, 'success');
+    showToast(`Inventory count updated for ${adjustingProduct.sku} at ${targetWh.name}`, 'success');
     setAdjustingProduct(null);
+  };
+
+  // Open Transfer Modal
+  const handleOpenTransfer = (initialProduct?: ProductItem) => {
+    setTransferProductId(initialProduct ? initialProduct.id : (products[0]?.id || ''));
+    setTransferFromWhId(warehouses[0]?.id || '');
+    setTransferToWhId(warehouses[1]?.id || warehouses[0]?.id || '');
+    setTransferQty(1);
+    setTransferNotes('Inter-hub stock replenishment');
+    setTransferError('');
+    setIsTransferModalOpen(true);
+  };
+
+  // Submit Inter-Warehouse Transfer
+  const handleSubmitTransfer = (e: React.FormEvent) => {
+    e.preventDefault();
+    setTransferError('');
+
+    if (!transferProductId) {
+      setTransferError('Please select a product to transfer');
+      return;
+    }
+    if (transferFromWhId === transferToWhId) {
+      setTransferError('Source and destination warehouse must be different');
+      return;
+    }
+    if (transferQty <= 0) {
+      setTransferError('Transfer quantity must be greater than 0');
+      return;
+    }
+
+    const prod = products.find(p => p.id === transferProductId);
+    if (!prod) return;
+
+    const fromWh = warehouses.find(w => w.id === transferFromWhId);
+    const toWh = warehouses.find(w => w.id === transferToWhId);
+    if (!fromWh || !toWh) return;
+
+    const availableStock = getProductStockInWarehouse(prod, transferFromWhId);
+    if (availableStock < transferQty) {
+      setTransferError(`Insufficient stock in ${fromWh.name}. Available: ${availableStock} ${prod.unit}`);
+      return;
+    }
+
+    const result = storageService.transferStock(
+      prod.id,
+      fromWh.id,
+      toWh.id,
+      transferQty,
+      transferNotes,
+      currentUser?.name || 'Logistics Coordinator'
+    );
+
+    if (!result.success) {
+      setTransferError(result.message || 'Transfer failed');
+      return;
+    }
+
+    triggerRefresh();
+    showToast(`Transferred ${transferQty} ${prod.unit} from ${fromWh.name} to ${toWh.name}`, 'success');
+    setIsTransferModalOpen(false);
   };
 
   return (
@@ -168,8 +285,8 @@ export const InventoryStockManager: React.FC = () => {
         </div>
       </div>
 
-      {/* Sub-tab Navigation */}
-      <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-3">
+      {/* Sub-tab Navigation and Actions */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 pb-3">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveSubTab('LEVELS')}
@@ -191,20 +308,55 @@ export const InventoryStockManager: React.FC = () => {
             }`}
           >
             <History className="w-4 h-4" />
-            Stock Movements & Audit Ledger ({movements.length})
+            Stock Movements & Audit Ledger ({filteredMovements.length})
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative w-64">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search items or logs..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden"
-          />
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Facility / Warehouse Filter */}
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs">
+            <WarehouseIcon className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span className="font-semibold text-slate-500 text-[11px]">Warehouse:</span>
+            <select
+              value={activeSubTab === 'LEVELS' ? selectedWarehouseId : movementWarehouseFilter}
+              onChange={e => {
+                if (activeSubTab === 'LEVELS') {
+                  setSelectedWarehouseId(e.target.value);
+                } else {
+                  setMovementWarehouseFilter(e.target.value);
+                }
+              }}
+              className="bg-transparent font-bold text-slate-800 focus:outline-hidden cursor-pointer"
+            >
+              <option value="ALL">All Facilities (Global Balance)</option>
+              {warehouses.map(w => (
+                <option key={w.id} value={w.id}>
+                  {w.name} {w.isDefault ? '★' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Transfer Stock Button */}
+          <button
+            onClick={() => handleOpenTransfer()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5" />
+            Transfer Stock
+          </button>
+
+          {/* Search */}
+          <div className="relative w-52 sm:w-60">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search items or logs..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-hidden"
+            />
+          </div>
         </div>
       </div>
 
@@ -217,19 +369,22 @@ export const InventoryStockManager: React.FC = () => {
                 <tr>
                   <th className="p-3.5">SKU & Item Name</th>
                   <th className="p-3.5">Category</th>
-                  <th className="p-3.5">Location</th>
-                  <th className="p-3.5 text-center">Current Stock</th>
+                  <th className="p-3.5">Facility / Location</th>
+                  <th className="p-3.5 text-center">
+                    {selectedWarehouseId === 'ALL' ? 'Total On-Hand' : 'Warehouse Stock'}
+                  </th>
                   <th className="p-3.5 text-center">Safety Min</th>
                   <th className="p-3.5 text-right">Valuation (₹)</th>
                   <th className="p-3.5 text-center">Status</th>
-                  <th className="p-3.5 text-right">Action</th>
+                  <th className="p-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredProducts.map(p => {
-                  const isLow = p.currentStock <= p.minStockThreshold;
-                  const itemValuation = p.currentStock * p.unitPrice;
-                  const ratio = Math.min(100, Math.round((p.currentStock / (p.minStockThreshold * 2.5)) * 100));
+                  const currentStockInTarget = getProductStockInWarehouse(p, selectedWarehouseId);
+                  const isLow = currentStockInTarget <= p.minStockThreshold;
+                  const itemValuation = currentStockInTarget * (p.unitPrice || 0);
+                  const ratio = Math.min(100, Math.round((currentStockInTarget / (p.minStockThreshold * 2.5)) * 100));
 
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/70 transition-colors">
@@ -242,14 +397,44 @@ export const InventoryStockManager: React.FC = () => {
                         </div>
                       </td>
                       <td className="p-3.5 text-slate-600">{p.category}</td>
-                      <td className="p-3.5 text-slate-600">{p.location}</td>
+                      <td className="p-3.5 text-slate-600 max-w-xs">
+                        {selectedWarehouseId !== 'ALL' ? (
+                          <div>
+                            <span className="font-medium text-slate-800">
+                              {warehouses.find(w => w.id === selectedWarehouseId)?.name || 'Specified Hub'}
+                            </span>
+                            <span className="block text-[10px] text-slate-400">
+                              Bin / Bay: {p.location || 'Aisle 1'}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <span className="text-[11px] text-slate-500 font-medium">Distributed:</span>
+                            <div className="flex flex-wrap gap-1">
+                              {warehouses.map(w => {
+                                const stockInWh = getProductStockInWarehouse(p, w.id);
+                                if (stockInWh <= 0) return null;
+                                return (
+                                  <span
+                                    key={w.id}
+                                    className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-mono"
+                                    title={`${w.name}: ${stockInWh} ${p.unit}`}
+                                  >
+                                    {w.code}: {stockInWh}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </td>
                       <td className="p-3.5 text-center">
                         <span
                           className={`font-mono font-bold text-sm ${
                             isLow ? 'text-rose-600' : 'text-slate-900'
                           }`}
                         >
-                          {p.currentStock} {p.unit}
+                          {currentStockInTarget} {p.unit}
                         </span>
                         {/* Mini visual gauge */}
                         <div className="w-16 bg-slate-100 h-1.5 rounded-full mx-auto mt-1 overflow-hidden">
@@ -270,21 +455,32 @@ export const InventoryStockManager: React.FC = () => {
                       <td className="p-3.5 text-center whitespace-nowrap">
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                            isLow
+                            currentStockInTarget <= 0
                               ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : isLow
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
                               : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}
                         >
-                          {isLow ? 'Low Stock' : 'Healthy'}
+                          {currentStockInTarget <= 0 ? 'Out of Stock' : isLow ? 'Low Stock' : 'Healthy'}
                         </span>
                       </td>
-                      <td className="p-3.5 text-right">
-                        <button
-                          onClick={() => handleOpenAdjust(p)}
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors"
-                        >
-                          Adjust Count
-                        </button>
+                      <td className="p-3.5 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleOpenAdjust(p)}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors"
+                          >
+                            Adjust
+                          </button>
+                          <button
+                            onClick={() => handleOpenTransfer(p)}
+                            className="p-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-[11px] font-semibold transition-colors"
+                            title="Transfer to another warehouse"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -300,7 +496,7 @@ export const InventoryStockManager: React.FC = () => {
         <div className="space-y-4">
           {/* Movement Type Filter */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {['ALL', 'PURCHASE_RECEIPT', 'BOM_ALLOCATION', 'INVOICE_SALE', 'ADJUSTMENT'].map(
+            {['ALL', 'PURCHASE_RECEIPT', 'BOM_ALLOCATION', 'WAREHOUSE_TRANSFER', 'AUDIT_RECONCILIATION', 'INVOICE_SALE', 'ADJUSTMENT'].map(
               type => (
                 <button
                   key={type}
@@ -325,6 +521,7 @@ export const InventoryStockManager: React.FC = () => {
                     <th className="p-3.5">Timestamp</th>
                     <th className="p-3.5">Transaction Type</th>
                     <th className="p-3.5">Item & SKU</th>
+                    <th className="p-3.5">Warehouse / Facility</th>
                     <th className="p-3.5 text-center">Change Qty</th>
                     <th className="p-3.5 text-center">Balance After</th>
                     <th className="p-3.5">Reference Document</th>
@@ -352,9 +549,13 @@ export const InventoryStockManager: React.FC = () => {
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 : m.movementType === 'BOM_ALLOCATION'
                                 ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : m.movementType === 'WAREHOUSE_TRANSFER'
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                : m.movementType === 'AUDIT_RECONCILIATION'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
                                 : m.movementType === 'INVOICE_SALE'
                                 ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-slate-100 text-slate-700 border-slate-200'
                             }`}
                           >
                             {isPositive ? (
@@ -368,6 +569,20 @@ export const InventoryStockManager: React.FC = () => {
                         <td className="p-3.5">
                           <div className="font-semibold text-slate-800">{m.productName}</div>
                           <span className="text-[10px] text-slate-400 font-mono">{m.sku}</span>
+                        </td>
+                        <td className="p-3.5 font-medium text-slate-700">
+                          {m.movementType === 'WAREHOUSE_TRANSFER' ? (
+                            <div className="flex items-center gap-1 text-[11px]">
+                              <span>{m.warehouseName || 'Hub'}</span>
+                              <ArrowRightLeft className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span>{m.targetWarehouseName || 'Hub'}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <WarehouseIcon className="w-3 h-3 text-slate-400" />
+                              <span>{m.warehouseName || 'Central Solar Logistics Hub'}</span>
+                            </div>
+                          )}
                         </td>
                         <td className="p-3.5 text-center font-mono font-bold">
                           <span className={isPositive ? 'text-emerald-700' : 'text-rose-700'}>
@@ -391,7 +606,7 @@ export const InventoryStockManager: React.FC = () => {
                   })}
                   {filteredMovements.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-400 italic">
+                      <td colSpan={8} className="p-8 text-center text-slate-400 italic">
                         No stock movement records found for this filter.
                       </td>
                     </tr>
@@ -416,7 +631,7 @@ export const InventoryStockManager: React.FC = () => {
               </div>
               <button
                 onClick={() => setAdjustingProduct(null)}
-                className="p-1 text-slate-400 hover:text-slate-600"
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -428,8 +643,26 @@ export const InventoryStockManager: React.FC = () => {
                 <span className="font-semibold text-slate-800 text-sm block">
                   {adjustingProduct.name}
                 </span>
-                <span className="text-xs text-slate-500 block mt-1">
-                  Recorded System Quantity: <strong>{adjustingProduct.currentStock} {adjustingProduct.unit}</strong>
+              </div>
+
+              {/* Target Warehouse Selection */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Reconcile for Warehouse Facility *
+                </label>
+                <select
+                  value={adjustWarehouseId}
+                  onChange={e => handleAdjustWarehouseChange(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-amber-500/20"
+                >
+                  {warehouses.map(w => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({w.code}) {w.isDefault ? '— Default Primary' : ''}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[11px] text-slate-500 block mt-1">
+                  Current Stock at this facility: <strong>{getProductStockInWarehouse(adjustingProduct, adjustWarehouseId)} {adjustingProduct.unit}</strong>
                 </span>
               </div>
 
@@ -472,15 +705,157 @@ export const InventoryStockManager: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setAdjustingProduct(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
                 >
                   Confirm Adjustment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Inter-Warehouse Stock Transfer */}
+      {isTransferModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                  <ArrowRightLeft className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Inter-Warehouse Stock Transfer</h3>
+                  <p className="text-xs text-slate-500">Relocate solar inventory items between registered hubs</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsTransferModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {transferError && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium">
+                {transferError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitTransfer} className="space-y-4">
+              {/* Product */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Select Product Item *
+                </label>
+                <select
+                  required
+                  value={transferProductId}
+                  onChange={e => setTransferProductId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl"
+                >
+                  <option value="">-- Choose Equipment SKU --</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.sku} - {p.name} (Total: {p.currentStock} {p.unit})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Source & Destination Warehouses */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    From Warehouse (Source) *
+                  </label>
+                  <select
+                    required
+                    value={transferFromWhId}
+                    onChange={e => setTransferFromWhId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl"
+                  >
+                    {warehouses.map(w => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                  {transferProductId && (
+                    <span className="text-[11px] text-slate-500 block mt-1">
+                      Available: <strong>{getProductStockInWarehouse(products.find(p => p.id === transferProductId)!, transferFromWhId)} units</strong>
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    To Warehouse (Destination) *
+                  </label>
+                  <select
+                    required
+                    value={transferToWhId}
+                    onChange={e => setTransferToWhId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl"
+                  >
+                    {warehouses.map(w => (
+                      <option key={w.id} value={w.id} disabled={w.id === transferFromWhId}>
+                        {w.name} {w.id === transferFromWhId ? '(Source)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Transfer Quantity *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={transferQty}
+                  onChange={e => setTransferQty(Math.max(1, Number(e.target.value)))}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+
+              {/* Transfer Notes */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Internal Transfer Notes & Dispatch Challan Ref
+                </label>
+                <input
+                  type="text"
+                  value={transferNotes}
+                  onChange={e => setTransferNotes(e.target.value)}
+                  placeholder="e.g. DC-2026-081, Transferred for Project Alpha site readiness"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsTransferModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                >
+                  Execute Stock Transfer
                 </button>
               </div>
             </form>
