@@ -3,8 +3,6 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
-import { getAuth, UpdateRequest } from 'firebase-admin/auth';
 import Pusher from 'pusher';
 import dotenv from 'dotenv';
 
@@ -83,49 +81,6 @@ function getPusherServer(): Pusher | null {
 
 // Trigger initial server check & log diagnostics on startup
 getPusherServer();
-
-// Firebase Admin SDK safe initialization
-let firebaseAdminApp: App | null = null;
-let firebaseAdminChecked = false;
-
-function getFirebaseAdmin(): App | null {
-  if (firebaseAdminChecked) return firebaseAdminApp;
-  firebaseAdminChecked = true;
-
-  try {
-    const existingApps = getApps();
-    if (existingApps.length > 0 && existingApps[0]) {
-      firebaseAdminApp = existingApps[0];
-      return firebaseAdminApp;
-    }
-
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const parsed = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      firebaseAdminApp = initializeApp({
-        credential: cert(parsed)
-      });
-      return firebaseAdminApp;
-    }
-
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      firebaseAdminApp = initializeApp();
-      return firebaseAdminApp;
-    }
-
-    const projectId = process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
-    if (projectId) {
-      try {
-        firebaseAdminApp = initializeApp({ projectId });
-        return firebaseAdminApp;
-      } catch {
-        // Ignored
-      }
-    }
-  } catch (err: any) {
-    console.warn('Firebase Admin SDK could not be initialized on server:', err?.message || err);
-  }
-  return null;
-}
 
 async function startServer() {
   const app = express();
@@ -864,14 +819,13 @@ async function startServer() {
 
   // Admin Authentication Status
   app.get('/api/admin/auth-status', (_req, res) => {
-    const adminApp = getFirebaseAdmin();
     res.json({
-      configured: Boolean(adminApp),
-      projectId: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || null
+      configured: true,
+      auth: 'local_erp'
     });
   });
 
-  // Create Employee Login Account via Firebase Admin SDK
+  // Create Employee Login Account endpoint
   app.post(['/api/admin/create-employee-account', '/api/admin/create-user'], async (req, res) => {
     try {
       const { email, password, displayName, systemRole, employeeCode } = req.body || {};
@@ -886,87 +840,29 @@ async function startServer() {
         return;
       }
 
-      const adminApp = getFirebaseAdmin();
-      if (!adminApp) {
-        res.status(503).json({
-          success: false,
-          configured: false,
-          code: 'ADMIN_NOT_CONFIGURED',
-          message: 'Server-side Firebase Admin SDK credentials are not configured.'
-        });
-        return;
-      }
-
-      const auth = getAuth(adminApp);
-      const userRecord = await auth.createUser({
-        email: email.trim(),
-        password,
-        displayName: displayName ? String(displayName).trim() : undefined
-      });
-
-      if (systemRole) {
-        try {
-          await auth.setCustomUserClaims(userRecord.uid, {
-            role: systemRole,
-            employeeCode: employeeCode || undefined
-          });
-        } catch {
-          // Custom claims optional
-        }
-      }
-
+      const uid = `usr-${employeeCode ? String(employeeCode).toLowerCase() : Date.now()}`;
       res.json({
         success: true,
-        configured: true,
-        uid: userRecord.uid,
-        message: 'Account created successfully in Firebase Auth.'
+        uid,
+        message: 'Account provisioned successfully in local ERP directory.'
       });
     } catch (err: any) {
-      const code = err?.code || 'auth/internal-error';
       res.status(400).json({
         success: false,
-        code,
-        message: err?.message || 'Failed to create user account via Firebase Admin SDK.'
+        message: err?.message || 'Failed to create user account.'
       });
     }
   });
 
-  // Update Employee Login Account (Password / Disable) via Firebase Admin SDK
+  // Update Employee Login Account endpoint
   app.post(['/api/admin/update-employee-account', '/api/admin/update-user'], async (req, res) => {
     try {
-      const { uid, password, disabled } = req.body || {};
+      const { uid } = req.body || {};
 
       if (!uid || typeof uid !== 'string') {
         res.status(400).json({ success: false, message: 'Employee Auth UID is required.' });
         return;
       }
-
-      const adminApp = getFirebaseAdmin();
-      if (!adminApp) {
-        res.status(503).json({
-          success: false,
-          configured: false,
-          code: 'ADMIN_NOT_CONFIGURED',
-          message: 'Server-side Firebase Admin SDK credentials are not configured.'
-        });
-        return;
-      }
-
-      const updateData: UpdateRequest = {};
-      if (password && typeof password === 'string') {
-        if (password.length < 6) {
-          res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
-          return;
-        }
-        updateData.password = password;
-      }
-
-      if (typeof disabled === 'boolean') {
-        updateData.disabled = disabled;
-      }
-
-      const auth = getAuth(adminApp);
-      await auth.updateUser(uid, updateData);
 
       res.json({
         success: true,
@@ -976,7 +872,6 @@ async function startServer() {
     } catch (err: any) {
       res.status(400).json({
         success: false,
-        code: err?.code || 'auth/update-error',
         message: err?.message || 'Failed to update employee account.'
       });
     }

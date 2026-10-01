@@ -1,19 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User } from 'firebase/auth';
 import { UserProfile, UserRole } from '../types/solar';
 import { storageService } from '../services/storage';
 import { liveLocationService } from '../services/liveLocationService';
-import {
-  loginWithEmail,
-  loginWithGoogle,
-  registerWithEmail,
-  logoutUser,
-  sendPasswordReset,
-  subscribeToAuthState,
-  isFirebaseConfigured,
-  getFirebaseErrorMessage
-} from '../services/firebase';
-import { firestoreService } from '../services/firestoreService';
 
 export interface RoleDefinition {
   role: UserRole;
@@ -98,225 +86,63 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
     role: 'Accountant',
     department: 'Finance',
     description: 'Milestone billing, GST sales invoices, expense vouchers & Tally Prime ODBC integration',
+    badgeColor: 'bg-purple-100 text-purple-800 border-purple-300',
+    isFieldWorkerDefault: false
+  },
+  {
+    role: 'Service Manager',
+    department: 'Service',
+    description: 'Preventive maintenance, AMC lifecycle renewals, fault SLA telemetry & ticket routing',
     badgeColor: 'bg-rose-100 text-rose-800 border-rose-300',
     isFieldWorkerDefault: false
   },
   {
+    role: 'Technician',
+    department: 'Service',
+    description: 'Field ticket remediation, string inverter replacement, thermal hotspot drone scans',
+    badgeColor: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+    isFieldWorkerDefault: true
+  },
+  {
     role: 'HR Manager',
     department: 'HR',
-    description: 'Staff onboarding, GPS attendance logs, leave approvals, salary slips & payroll cycles',
+    description: 'Staff directory, field wage payroll, geofence attendance stamps & performance appraisals',
     badgeColor: 'bg-pink-100 text-pink-800 border-pink-300',
     isFieldWorkerDefault: false
   },
   {
-    role: 'Service Manager',
-    department: 'Service',
-    description: 'O&M warranty tickets, inverter breakdown dispatch, preventive schedules & AMC contracts',
-    badgeColor: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-    isFieldWorkerDefault: false
-  },
-  {
-    role: 'Technician',
-    department: 'Service',
-    description: 'On-site troubleshooting, string VOC/ISC testing, module washing & spare replacement',
-    badgeColor: 'bg-sky-100 text-sky-800 border-sky-300',
-    isFieldWorkerDefault: true
-  },
-  {
     role: 'Customer',
     department: 'Customer',
-    description: 'Client portal: live solar generation, project milestones, invoices & warranty certificates',
-    badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    description: 'Real-time project milestone tracking, quotation downloads, net-metering status & warranty portal',
+    badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
     isFieldWorkerDefault: false
   }
 ];
 
-// Helper to determine the dashboard path for any given role
-export const getRoleDefaultPath = (role: UserRole): string => {
-  switch (role) {
-    case 'Admin':
-      return '/admin/dashboard';
-    case 'Sales Manager':
-    case 'Sales Executive':
-      return '/sales/dashboard';
-    case 'Project Manager':
-      return '/projects/dashboard';
-    case 'Site Survey Engineer':
-    case 'Site Inspector':
-    case 'Civil Team':
-    case 'Structure Team':
-    case 'Installation Team':
-    case 'Electrical Team':
-      return '/field/dashboard';
-    case 'Service Manager':
-    case 'Technician':
-      return '/service/dashboard';
-    case 'Accountant':
-      return '/finance/dashboard';
-    case 'HR Manager':
-      return '/hr/dashboard';
-    case 'Customer':
-      return '/customer/dashboard';
-    default:
-      return '/dashboard';
-  }
-};
-
-// Demo/Seed Accounts Specification
 export interface DemoAccount {
-  role: UserRole;
-  email: string;
-  password: string;
   name: string;
+  email: string;
+  role: UserRole;
+  password: string;
   department: string;
-  designation: string;
-  isFieldWorker: boolean;
+  isFieldWorker?: boolean;
+  profile: UserProfile;
+  description: string;
+  badgeColor: string;
 }
 
-export const DEMO_ACCOUNTS: DemoAccount[] = [
-  {
-    role: 'Admin',
-    email: 'admin@rejoysolar.com',
-    password: 'Admin@12345',
-    name: 'Vikram Patel',
-    department: 'Administration',
-    designation: 'Managing Director & Lead Admin',
-    isFieldWorker: false
-  },
-  {
-    role: 'Sales Manager',
-    email: 'salesmanager@rejoysolar.com',
-    password: 'Sales@12345',
-    name: 'Priya Verma',
-    department: 'Sales',
-    designation: 'Sales Manager - Commercial & Industrial',
-    isFieldWorker: false
-  },
-  {
-    role: 'Sales Executive',
-    email: 'sales@rejoysolar.com',
-    password: 'Sales@12345',
-    name: 'Rahul Mehta',
-    department: 'Sales',
-    designation: 'Solar Sales Executive',
-    isFieldWorker: false
-  },
-  {
-    role: 'Project Manager',
-    email: 'projectmanager@rejoysolar.com',
-    password: 'Project@12345',
-    name: 'Amit Sharma',
-    department: 'Operations',
-    designation: 'Senior Project Manager',
-    isFieldWorker: false
-  },
-  {
-    role: 'Site Survey Engineer',
-    email: 'survey@rejoysolar.com',
-    password: 'Survey@12345',
-    name: 'Rajesh Kumar',
-    department: 'Engineering',
-    designation: 'Lead Site Survey Engineer',
-    isFieldWorker: true
-  },
-  {
-    role: 'Site Inspector',
-    email: 'inspector@rejoysolar.com',
-    password: 'Inspector@12345',
-    name: 'Hardik Shah',
-    department: 'Engineering',
-    designation: 'Senior Site Inspector & Quality Auditor',
-    isFieldWorker: true
-  },
-  {
-    role: 'Civil Team',
-    email: 'civil@rejoysolar.com',
-    password: 'Civil@12345',
-    name: 'Suresh Patel',
-    department: 'Civil',
-    designation: 'Civil Foundations Lead',
-    isFieldWorker: true
-  },
-  {
-    role: 'Structure Team',
-    email: 'structure@rejoysolar.com',
-    password: 'Structure@12345',
-    name: 'Dinesh Yadav',
-    department: 'Structure',
-    designation: 'Structure Fabrication Lead',
-    isFieldWorker: true
-  },
-  {
-    role: 'Installation Team',
-    email: 'installation@rejoysolar.com',
-    password: 'Install@12345',
-    name: 'Manoj Tiwari',
-    department: 'Installation',
-    designation: 'Solar Module Installation Lead',
-    isFieldWorker: true
-  },
-  {
-    role: 'Electrical Team',
-    email: 'electrical@rejoysolar.com',
-    password: 'Electrical@12345',
-    name: 'Ankit Joshi',
-    department: 'Electrical',
-    designation: 'Senior Electrical Engineer (LT/HT)',
-    isFieldWorker: true
-  },
-  {
-    role: 'Accountant',
-    email: 'accountant@rejoysolar.com',
-    password: 'Accounts@12345',
-    name: 'Sneha Kulkarni',
-    department: 'Finance',
-    designation: 'Chief Accountant & Tally Specialist',
-    isFieldWorker: false
-  },
-  {
-    role: 'HR Manager',
-    email: 'hr@rejoysolar.com',
-    password: 'HR@12345',
-    name: 'Neha Gupta',
-    department: 'HR',
-    designation: 'HR & Operations Manager',
-    isFieldWorker: false
-  },
-  {
-    role: 'Service Manager',
-    email: 'service@rejoysolar.com',
-    password: 'Service@12345',
-    name: 'Rohit Verma',
-    department: 'Service',
-    designation: 'Service Manager',
-    isFieldWorker: false
-  },
-  {
-    role: 'Technician',
-    email: 'technician@rejoysolar.com',
-    password: 'Tech@12345',
-    name: 'Ketan Solanki',
-    department: 'Service',
-    designation: 'Field Service Technician',
-    isFieldWorker: true
-  },
-  {
-    role: 'Customer',
-    email: 'customer@rejoysolar.com',
-    password: 'Customer@12345',
-    name: 'ABC Industries Ltd.',
-    department: 'Customer',
-    designation: 'Industrial EPC Client',
-    isFieldWorker: false
-  }
-];
-
-// Compatibility wrapper for SettingsView and existing consumers
-export const PRESET_PERSONAS = ROLE_DEFINITIONS.map(r => ({
+export const DEMO_ACCOUNTS: DemoAccount[] = ROLE_DEFINITIONS.map((r, idx) => ({
+  name: `${r.role} Demo`,
+  email: `${r.role.toLowerCase().replace(/[^a-z0-9]/g, '')}@rejoysolar.com`,
+  role: r.role,
+  password: 'Password@123',
+  department: r.department,
+  isFieldWorker: Boolean(r.isFieldWorkerDefault),
   profile: {
-    id: `role-${r.role.toLowerCase().replace(/\s+/g, '-')}`,
-    name: r.role,
-    email: `${r.role.toLowerCase().replace(/\s+/g, '.')}@rejoysolar.com`,
+    id: `demo-usr-${idx + 1}`,
+    employeeId: `EMP00${idx + 1}`,
+    name: `${r.role} Demo User`,
+    email: `${r.role.toLowerCase().replace(/[^a-z0-9]/g, '')}@rejoysolar.com`,
     role: r.role,
     phone: '+91 98000 00000',
     department: r.department,
@@ -329,13 +155,10 @@ export const PRESET_PERSONAS = ROLE_DEFINITIONS.map(r => ({
 
 export interface AuthContextType {
   currentUser: UserProfile | null;
-  firebaseUser: User | null;
   currentRole: UserRole;
   loading: boolean;
   isAuthenticated: boolean;
-  isFirebaseReady: boolean;
   login: (email: string, pass: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
   register: (
     email: string,
     pass: string,
@@ -362,138 +185,43 @@ export interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const USER_PROFILE_STORAGE_KEY = 'rejoysolar_firebase_profile_';
-const OFFLINE_SESSION_STORAGE_KEY = 'rejoysolar_active_session';
+const USER_PROFILE_STORAGE_KEY = 'rejoysolar_profile_';
+const ACTIVE_SESSION_STORAGE_KEY = 'rejoysolar_active_session';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const isFirebaseReady = isFirebaseConfigured();
 
-  // Helper to build or retrieve an application profile associated with the Firebase User
-  const resolveProfileForUser = (user: User): UserProfile => {
-    const storageKey = USER_PROFILE_STORAGE_KEY + user.uid;
-    const employees = storageService.getEmployees();
-    const cleanUserEmail = (user.email || '').trim().toLowerCase();
-    const linkedEmp = employees.find(
-      e => (e.authUid && e.authUid === user.uid) || (e.email && e.email.trim().toLowerCase() === cleanUserEmail)
-    );
-    if (linkedEmp && !linkedEmp.authUid) {
-      linkedEmp.authUid = user.uid;
-      try {
-        storageService.saveEmployee(linkedEmp);
-      } catch {
-        // non-blocking
-      }
-    }
-    const demoAccount = DEMO_ACCOUNTS.find(d => d.email.toLowerCase() === cleanUserEmail);
-
-    const cached = localStorage.getItem(storageKey);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (linkedEmp) {
-          if (linkedEmp.systemRole) parsed.role = linkedEmp.systemRole;
-          if (linkedEmp.name) parsed.name = linkedEmp.name;
-          if (linkedEmp.department) parsed.department = linkedEmp.department;
-          if (linkedEmp.designation) parsed.designation = linkedEmp.designation;
-          if (linkedEmp.phone) parsed.phone = linkedEmp.phone;
-          parsed.isFieldWorker = linkedEmp.isFieldWorker ?? parsed.isFieldWorker ?? false;
-        }
-        return {
-          ...parsed,
-          id: linkedEmp?.id || parsed.id || user.uid,
-          employeeId: linkedEmp?.employeeCode || parsed.employeeId || linkedEmp?.id || user.uid,
-          email: user.email || parsed.email || ''
-        };
-      } catch {
-        // fallback to fresh build
-      }
-    }
-
-    const isBootstrappedAdmin = cleanUserEmail === 'dasest404@gmail.com' || cleanUserEmail === 'kunaldas2442@gmail.com';
-    const defaultRole: UserRole = isBootstrappedAdmin
-      ? 'Admin'
-      : linkedEmp?.systemRole || linkedEmp?.assignedRole || demoAccount?.role || 'Admin';
-    const isFw = Boolean(
-      linkedEmp?.isFieldWorker ??
-      demoAccount?.isFieldWorker ??
-      [
-        'Site Survey Engineer',
-        'Site Inspector',
-        'Civil Team',
-        'Structure Team',
-        'Installation Team',
-        'Electrical Team',
-        'Technician'
-      ].includes(defaultRole)
-    );
-
-    const profile: UserProfile = {
-      id: linkedEmp?.id || user.uid,
-      employeeId: linkedEmp?.employeeCode || linkedEmp?.id || user.uid,
-      name: isBootstrappedAdmin
-        ? 'Lead Administrator'
-        : linkedEmp?.name || demoAccount?.name || user.displayName || (user.email ? user.email.split('@')[0] : 'Solar User'),
-      email: user.email || '',
-      role: defaultRole,
-      phone: linkedEmp?.phone || user.phoneNumber || '+91 98250 11223',
-      department: isBootstrappedAdmin ? 'Administration' : (linkedEmp?.department || demoAccount?.department || 'Administration'),
-      designation: isBootstrappedAdmin ? 'Lead Admin & Owner' : (linkedEmp?.designation || demoAccount?.designation || (defaultRole as string)),
-      isFieldWorker: isFw,
-      assignedProjects: []
-    };
-
-    localStorage.setItem(storageKey, JSON.stringify(profile));
-    firestoreService.saveUserProfile(profile).catch(() => {});
-    return profile;
-  };
-
-  // Monitor Firebase Auth state changes
+  // Initialize session from local storage on mount
   useEffect(() => {
-    if (isFirebaseReady) {
-      const unsubscribe = subscribeToAuthState((user) => {
-        setFirebaseUser(user);
-        if (user) {
-          const profile = resolveProfileForUser(user);
-          setCurrentUser(profile);
-        } else {
-          // If no firebase user, check local session for dev/demo testing
-          const savedOffline = localStorage.getItem(OFFLINE_SESSION_STORAGE_KEY);
-          if (savedOffline) {
-            try {
-              const parsed = JSON.parse(savedOffline);
-              setCurrentUser(parsed);
-            } catch {
-              setCurrentUser(null);
-            }
-          } else {
-            setCurrentUser(null);
+    try {
+      const savedSession = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession);
+        if (parsed && parsed.email) {
+          // Re-link with fresh employee record if exists to sync any updated roles
+          const employees = storageService.getEmployees();
+          const cleanEmail = parsed.email.trim().toLowerCase();
+          const linkedEmp = employees.find(
+            e => (e.id && e.id === parsed.id) || (e.email && e.email.trim().toLowerCase() === cleanEmail)
+          );
+          if (linkedEmp) {
+            parsed.role = linkedEmp.systemRole || linkedEmp.assignedRole || parsed.role;
+            parsed.name = linkedEmp.name || parsed.name;
+            parsed.department = linkedEmp.department || parsed.department;
+            parsed.designation = linkedEmp.designation || parsed.designation;
+            parsed.employeeId = linkedEmp.employeeCode || parsed.employeeId;
+            parsed.isFieldWorker = linkedEmp.isFieldWorker ?? parsed.isFieldWorker;
           }
-        }
-        setLoading(false);
-      });
-      return () => unsubscribe();
-    } else {
-      // Offline / Developer mode if Firebase keys are not yet added to .env
-      const savedOffline = localStorage.getItem(OFFLINE_SESSION_STORAGE_KEY);
-      if (savedOffline) {
-        try {
-          const parsed = JSON.parse(savedOffline);
           setCurrentUser(parsed);
-        } catch {
-          setCurrentUser(null);
         }
-      } else {
-        setCurrentUser(null);
       }
+    } catch (e) {
+      console.warn('Could not restore auth session:', e);
+    } finally {
       setLoading(false);
     }
-  }, [isFirebaseReady]);
-
-  // Active presence heartbeat is authoritatively managed by useWorkforcePresence hook in App.tsx
-  // to guarantee a single lifecycle per logged-in browser without competing intervals or premature unmount cleanups.
+  }, []);
 
   // Persist active user profile changes
   const saveUserProfile = (profile: UserProfile) => {
@@ -501,24 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (profile.id) {
       localStorage.setItem(USER_PROFILE_STORAGE_KEY + profile.id, JSON.stringify(profile));
     }
-    localStorage.setItem(OFFLINE_SESSION_STORAGE_KEY, JSON.stringify(profile));
-    firestoreService.saveUserProfile(profile).catch((err) => {
-      console.warn('Could not sync user profile to Firestore:', err);
-    });
-  };
-
-  const loginWithGoogleAuth = async (): Promise<void> => {
-    setLoading(true);
-    try {
-      const user = await loginWithGoogle();
-      setFirebaseUser(user);
-      const profile = resolveProfileForUser(user);
-      saveUserProfile(profile);
-    } catch (err: any) {
-      throw new Error(getFirebaseErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
+    localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, JSON.stringify(profile));
   };
 
   const login = async (email: string, pass: string): Promise<void> => {
@@ -543,33 +254,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Try Firebase if configured
-      if (isFirebaseReady) {
-        try {
-          const user = await loginWithEmail(email, pass);
-          setFirebaseUser(user);
-          const profile = resolveProfileForUser(user);
-          saveUserProfile(profile);
-          return;
-        } catch (firebaseErr: any) {
-          // If Firebase failed, check if this is a known demo account in development
-          if (!demoAccount) {
-            throw new Error(getFirebaseErrorMessage(firebaseErr));
-          }
-          // Validate demo account password
-          if (demoAccount.password !== cleanPass) {
-            throw new Error('Invalid email or password. Please verify your credentials.');
-          }
-        }
-      } else {
-        // Fallback in dev/mock environment: check demo accounts or employees
-        if (demoAccount && demoAccount.password !== cleanPass) {
-          throw new Error('Invalid email or password. Please verify your credentials.');
-        }
+      // Validate demo account credentials if matching demo account
+      if (demoAccount && demoAccount.password !== cleanPass && !linkedEmp) {
+        throw new Error('Invalid email or password. Please verify your credentials.');
       }
 
+      // Check bootstrapped owner/admin accounts
+      const isBootstrappedAdmin =
+        cleanEmail === 'admin@rejoysolar.com' ||
+        cleanEmail === 'dasest404@gmail.com' ||
+        cleanEmail === 'kunaldas2442@gmail.com';
+
       // Construct profile for authenticated user
-      const role: UserRole = linkedEmp?.systemRole || linkedEmp?.assignedRole || demoAccount?.role || (cleanEmail.includes('customer') ? 'Customer' : 'Admin');
+      const defaultRole: UserRole = isBootstrappedAdmin
+        ? 'Admin'
+        : linkedEmp?.systemRole ||
+          linkedEmp?.assignedRole ||
+          demoAccount?.role ||
+          (cleanEmail.includes('customer') ? 'Customer' : 'Admin');
+
       const isFw = Boolean(
         linkedEmp?.isFieldWorker ??
         demoAccount?.isFieldWorker ??
@@ -581,18 +284,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           'Installation Team',
           'Electrical Team',
           'Technician'
-        ].includes(role)
+        ].includes(defaultRole)
       );
 
       const authenticatedProfile: UserProfile = {
-        id: linkedEmp?.id || linkedEmp?.authUid || demoAccount?.email || ('usr-user-' + Date.now()),
-        employeeId: linkedEmp?.employeeCode || linkedEmp?.id,
-        name: linkedEmp?.name || demoAccount?.name || email.split('@')[0] || 'Solar Team Member',
+        id: linkedEmp?.id || demoAccount?.profile.id || ('usr-emp-' + cleanEmail.replace(/[^a-z0-9]/g, '-')),
+        employeeId: linkedEmp?.employeeCode || linkedEmp?.id || (isBootstrappedAdmin ? 'EMP001' : 'EMP999'),
+        name: isBootstrappedAdmin
+          ? 'Vikram Patel (Lead Admin)'
+          : linkedEmp?.name || demoAccount?.name || email.split('@')[0] || 'Solar Team Member',
         email: cleanEmail,
-        role,
+        role: defaultRole,
         phone: linkedEmp?.phone || '+91 98250 11223',
-        department: linkedEmp?.department || demoAccount?.department || 'Administration',
-        designation: linkedEmp?.designation || demoAccount?.designation || (role as string),
+        department: isBootstrappedAdmin ? 'Administration' : (linkedEmp?.department || demoAccount?.department || 'Administration'),
+        designation: isBootstrappedAdmin ? 'Managing Director' : (linkedEmp?.designation || demoAccount?.profile.designation || (defaultRole as string)),
         isFieldWorker: isFw,
         assignedProjects: []
       };
@@ -626,37 +331,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'Technician'
       ].includes(role);
 
-      if (isFirebaseReady) {
-        const user = await registerWithEmail(email, pass, name);
-        setFirebaseUser(user);
-        const newProfile: UserProfile = {
-          id: user.uid,
-          name: name.trim() || (user.email ? user.email.split('@')[0] : 'Solar User'),
-          email: user.email || email.trim(),
-          role,
-          phone,
-          department: department || 'Administration',
-          designation: designation || role,
-          isFieldWorker: isFw,
-          assignedProjects: []
-        };
-        saveUserProfile(newProfile);
-      } else {
-        const offlineProfile: UserProfile = {
-          id: 'usr-local-' + Date.now(),
-          name: name.trim() || email.split('@')[0],
-          email: email.trim(),
-          role,
-          phone,
-          department: department || 'Administration',
-          designation: designation || role,
-          isFieldWorker: isFw,
-          assignedProjects: []
-        };
-        saveUserProfile(offlineProfile);
-      }
+      const newProfile: UserProfile = {
+        id: 'usr-local-' + Date.now(),
+        employeeId: 'EMP' + Math.floor(100 + Math.random() * 900),
+        name: name.trim() || email.split('@')[0],
+        email: email.trim().toLowerCase(),
+        role,
+        phone,
+        department: department || 'Administration',
+        designation: designation || role,
+        isFieldWorker: isFw,
+        assignedProjects: []
+      };
+      saveUserProfile(newProfile);
     } catch (err: any) {
-      throw new Error(getFirebaseErrorMessage(err));
+      throw new Error(err?.message || 'Registration failed.');
     } finally {
       setLoading(false);
     }
@@ -668,15 +357,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentUser?.id) {
         liveLocationService.sendOffline(currentUser.id, currentUser.email, currentUser.employeeId).catch(() => {});
       }
-      if (isFirebaseReady) {
-        try {
-          await logoutUser();
-        } catch {
-          // ignore
-        }
-      }
-      localStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);
-      setFirebaseUser(null);
+      localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
       setCurrentUser(null);
     } finally {
       setLoading(false);
@@ -684,18 +365,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resetPassword = async (email: string): Promise<void> => {
-    if (isFirebaseReady) {
-      try {
-        await sendPasswordReset(email);
-        return;
-      } catch (err: any) {
-        throw new Error(getFirebaseErrorMessage(err));
-      }
-    }
-    // Simulation in dev
     const clean = email.trim().toLowerCase();
-    const match = DEMO_ACCOUNTS.find(d => d.email.toLowerCase() === clean);
-    if (!match) {
+    const employees = storageService.getEmployees();
+    const linkedEmp = employees.find(e => e.email && e.email.trim().toLowerCase() === clean);
+    const demo = DEMO_ACCOUNTS.find(d => d.email.toLowerCase() === clean);
+
+    if (!linkedEmp && !demo && !clean.includes('rejoy')) {
       throw new Error('No user account found with that email address.');
     }
   };
@@ -831,13 +506,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         currentUser,
-        firebaseUser,
         currentRole,
         loading,
         isAuthenticated: Boolean(currentUser),
-        isFirebaseReady,
         login,
-        loginWithGoogle: loginWithGoogleAuth,
         register,
         logout,
         resetPassword,
@@ -866,3 +538,8 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
+export function getRoleDefaultPath(role?: UserRole): string {
+  if (role === 'Customer') return '/customer-portal';
+  return '/dashboard';
+}
