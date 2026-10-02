@@ -4,6 +4,14 @@ import { ReportFilterState, ReportCategoryMeta } from '../../types/reports';
 import { exportToCSV } from '../../services/exportImport';
 import { ReportFilterBar } from './ReportFilterBar';
 import { Users, AlertCircle, CheckCircle2, ChevronRight, ChevronDown, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
+} from 'recharts';
 
 interface CustomerLedgerReportProps {
   customers: Customer[];
@@ -160,6 +168,13 @@ export const CustomerLedgerReport: React.FC<CustomerLedgerReportProps> = ({
   const totalBilledVal = filteredLedger.reduce((sum, l) => sum + l.totalBilled, 0);
   const overdueCount = filteredLedger.filter(l => l.hasOverdue).length;
 
+  const collectionShareData = useMemo(() => {
+    return [
+      { name: 'Collected Amount', value: totalCollections, color: '#10b981' },
+      { name: 'Outstanding Amount', value: totalReceivables, color: '#f59e0b' }
+    ].filter(d => d.value > 0);
+  }, [totalCollections, totalReceivables]);
+
   const handleExportCSV = () => {
     const headers = [
       'Customer ID',
@@ -254,6 +269,38 @@ export const CustomerLedgerReport: React.FC<CustomerLedgerReportProps> = ({
           <p className="text-[11px] text-slate-500 mt-0.5">Requiring payment followup</p>
         </div>
       </div>
+
+      {/* Donut Chart: Collected vs Outstanding Amount */}
+      {collectionShareData.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Customer Ledger: Collected vs Outstanding Balance</h3>
+          <p className="text-xs text-slate-500 mb-4">Proportion of realized revenue receipts vs pending customer receivables</p>
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={collectionShareData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {collectionShareData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Amount']}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Customer Ledger Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">

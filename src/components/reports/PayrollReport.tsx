@@ -6,13 +6,25 @@ import { ReportFilterBar } from './ReportFilterBar';
 import { Wallet, Users, CheckCircle2, Clock, DollarSign } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
 } from 'recharts';
+
+const CHART_COLORS = [
+  '#8b5cf6',
+  '#3b82f6',
+  '#10b981',
+  '#f59e0b',
+  '#ec4899',
+  '#06b6d4',
+  '#f97316',
+  '#6366f1',
+  '#14b8a6',
+  '#e11d48'
+];
 
 interface PayrollReportProps {
   payslips: Payslip[];
@@ -89,6 +101,12 @@ export const PayrollReport: React.FC<PayrollReportProps> = ({
     });
     return Object.values(map).sort((a, b) => b.net - a.net);
   }, [filteredPayslips]);
+
+  const deptPayrollShare = useMemo(() => {
+    return deptData
+      .map(d => ({ name: d.department, value: d.net }))
+      .filter(d => d.value > 0);
+  }, [deptData]);
 
   const handleExportCSV = () => {
     const headers = [
@@ -191,28 +209,33 @@ export const PayrollReport: React.FC<PayrollReportProps> = ({
         </div>
       </div>
 
-      {/* Department Breakdown */}
-      {deptData.length > 0 && (
+      {/* Donut Chart: Department Payroll Share */}
+      {deptPayrollShare.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">Payroll Expenditure by Department</h3>
-          <p className="text-xs text-slate-500 mb-4">Salary disbursement distribution across organizational divisions</p>
-          <div className="h-60 w-full">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Department Payroll Share</h3>
+          <p className="text-xs text-slate-500 mb-4">Proportion of net compensation distributed across organizational divisions</p>
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={deptData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="department" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#64748b' }}
-                  tickFormatter={val => `₹${(val / 1000).toFixed(0)}k`}
-                  axisLine={false}
-                  tickLine={false}
-                />
+              <PieChart>
+                <Pie
+                  data={deptPayrollShare}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {deptPayrollShare.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip
                   formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Net Payroll']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="net" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
-              </BarChart>
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </div>

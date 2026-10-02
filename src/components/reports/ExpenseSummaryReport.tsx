@@ -6,13 +6,25 @@ import { ReportFilterBar } from './ReportFilterBar';
 import { Receipt, PieChart as PieIcon, Layers, TrendingDown } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
 } from 'recharts';
+
+const CHART_COLORS = [
+  '#ef4444',
+  '#f59e0b',
+  '#3b82f6',
+  '#10b981',
+  '#8b5cf6',
+  '#ec4899',
+  '#06b6d4',
+  '#f97316',
+  '#6366f1',
+  '#14b8a6'
+];
 
 interface ExpenseSummaryReportProps {
   expenses: ExpenseRecord[];
@@ -87,6 +99,12 @@ export const ExpenseSummaryReport: React.FC<ExpenseSummaryReportProps> = ({
     });
     return Object.values(map).sort((a, b) => b.amount - a.amount);
   }, [filteredExpenses]);
+
+  const expenseShareData = useMemo(() => {
+    return categoryChartData
+      .map(d => ({ name: d.category, value: d.amount }))
+      .filter(d => d.value > 0);
+  }, [categoryChartData]);
 
   const handleExportCSV = () => {
     const headers = [
@@ -191,40 +209,33 @@ export const ExpenseSummaryReport: React.FC<ExpenseSummaryReportProps> = ({
         </div>
       </div>
 
-      {/* Category Chart */}
-      {categoryChartData.length > 0 && (
+      {/* Donut Chart: Category Expense Share */}
+      {expenseShareData.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">Cost Distribution by Expense Category</h3>
-          <p className="text-xs text-slate-500 mb-4">Capital outflow across raw materials, logistics and labor</p>
-          <div className="h-64 w-full">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Expense Category Share</h3>
+          <p className="text-xs text-slate-500 mb-4">Proportion of organizational capital outflow across cost centers</p>
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={categoryChartData}
-                layout="vertical"
-                margin={{ top: 10, right: 20, left: 40, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 11, fill: '#64748b' }}
-                  tickFormatter={val => `₹${(val / 1000).toFixed(0)}k`}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="category"
-                  tick={{ fontSize: 10, fill: '#334155' }}
-                  width={140}
-                  axisLine={false}
-                  tickLine={false}
-                />
+              <PieChart>
+                <Pie
+                  data={expenseShareData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {expenseShareData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip
-                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Outflow Amount']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Expense Amount']}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="amount" fill="#ef4444" radius={[0, 6, 6, 0]} />
-              </BarChart>
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </div>

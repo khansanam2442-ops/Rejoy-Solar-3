@@ -379,38 +379,38 @@ export const ProductStockReport: React.FC<ProductStockReportProps> = ({
         </div>
       </div>
 
-      {/* Valuation by Category Chart */}
-      {categoryChartData.length > 0 && activeReportSubTab === 'LEVELS' && (
+      {/* Donut Chart: Stock Asset Valuation by Category */}
+      {categoryChartData.length > 0 && categoryChartData.some(d => d.value > 0) && activeReportSubTab === 'LEVELS' && (
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-bold text-slate-900">
                 Stock Asset Valuation by Category {selectedWarehouse ? `(${selectedWarehouse.name})` : '(All Hubs)'}
               </h3>
-              <p className="text-xs text-slate-500">Capital distribution in panels, inverters, and BOS hardware</p>
+              <p className="text-xs text-slate-500">Category stock-value share in panels, inverters, and BOS hardware</p>
             </div>
           </div>
-          <div className="h-64 w-full flex items-center justify-center">
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={categoryChartData}
+                  data={categoryChartData.filter(d => d.value > 0)}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
                   outerRadius={95}
-                  paddingAngle={4}
+                  paddingAngle={3}
                   dataKey="value"
                 >
-                  {categoryChartData.map((_, index) => (
+                  {categoryChartData.filter(d => d.value > 0).map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip
                   formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Stock Value']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>

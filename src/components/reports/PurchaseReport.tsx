@@ -7,13 +7,25 @@ import { ReportFilterBar } from './ReportFilterBar';
 import { ShoppingCart, PackageCheck, Clock, Percent, Building2, Warehouse as WarehouseIcon } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
 } from 'recharts';
+
+const CHART_COLORS = [
+  '#3b82f6',
+  '#f59e0b',
+  '#10b981',
+  '#8b5cf6',
+  '#ec4899',
+  '#06b6d4',
+  '#f97316',
+  '#6366f1',
+  '#14b8a6',
+  '#e11d48'
+];
 
 interface PurchaseReportProps {
   orders: PurchaseOrder[];
@@ -70,16 +82,17 @@ export const PurchaseReport: React.FC<PurchaseReportProps> = ({
   const receivedOrders = filteredOrders.filter(po => po.status === 'RECEIVED').length;
   const pendingDelivery = filteredOrders.filter(po => po.status === 'ORDERED' || po.status === 'PARTIALLY_RECEIVED' || po.status === 'DRAFT').length;
 
-  // Chart data by Vendor
-  const vendorBreakdown = useMemo(() => {
-    const map: Record<string, { vendor: string; total: number; count: number }> = {};
+  // Chart data by Vendor: Vendor Spend Share
+  const vendorSpendShare = useMemo(() => {
+    const map: Record<string, number> = {};
     filteredOrders.forEach(po => {
-      const v = po.vendorName.length > 15 ? po.vendorName.slice(0, 15) + '...' : po.vendorName;
-      if (!map[v]) map[v] = { vendor: v, total: 0, count: 0 };
-      map[v].total += po.totalAmount || 0;
-      map[v].count += 1;
+      const v = po.vendorName || 'General Vendor';
+      map[v] = (map[v] || 0) + (po.totalAmount || 0);
     });
-    return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 6);
+    return Object.entries(map)
+      .map(([name, value]) => ({ name, value }))
+      .filter(d => d.value > 0)
+      .sort((a, b) => b.value - a.value);
   }, [filteredOrders]);
 
   const handleExportCSV = () => {
@@ -202,28 +215,33 @@ export const PurchaseReport: React.FC<PurchaseReportProps> = ({
         </div>
       </div>
 
-      {/* Top Vendors Chart */}
-      {vendorBreakdown.length > 0 && (
+      {/* Donut Chart: Vendor Spend Share */}
+      {vendorSpendShare.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">Procurement Spend by Major Vendor</h3>
-          <p className="text-xs text-slate-500 mb-4">Volume allocated to tier-1 module and inverter suppliers</p>
-          <div className="h-60 w-full">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Vendor Procurement Spend Share</h3>
+          <p className="text-xs text-slate-500 mb-4">Proportion of procurement spend allocated across equipment and service vendors</p>
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={vendorBreakdown} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="vendor" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#64748b' }}
-                  tickFormatter={val => `₹${(val / 100000).toFixed(1)}L`}
-                  axisLine={false}
-                  tickLine={false}
-                />
+              <PieChart>
+                <Pie
+                  data={vendorSpendShare}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {vendorSpendShare.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip
-                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Total Orders']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Spend Amount']}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="total" name="Total Value" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-              </BarChart>
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </div>

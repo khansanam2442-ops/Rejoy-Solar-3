@@ -755,6 +755,15 @@ export const HrmsView: React.FC = () => {
                             Suspended
                           </span>
                         )}
+                        {Boolean(e.documents && e.documents.length > 0) && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200"
+                            title={`${e.documents?.length} HR Document${(e.documents?.length || 0) > 1 ? 's' : ''} attached`}
+                          >
+                            <FileText className="w-2.5 h-2.5" />
+                            <span>{e.documents?.length} Doc{(e.documents?.length || 0) > 1 ? 's' : ''}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -865,6 +874,13 @@ export const HrmsView: React.FC = () => {
                           <span>{a.siteLocation || 'General Site'}</span>
                           {a.siteProjectTitle && (
                             <p className="text-[10px] text-slate-500 truncate">{a.siteProjectTitle}</p>
+                          )}
+                          {Boolean(a.fuelExpense?.totalKmDriven) && (
+                            <div className="pt-0.5">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                                <span>🚗 {a.fuelExpense?.totalKmDriven} km mileage</span>
+                              </span>
+                            </div>
                           )}
                         </div>
                       </td>

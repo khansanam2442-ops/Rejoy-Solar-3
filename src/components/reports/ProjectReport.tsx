@@ -6,13 +6,25 @@ import { ReportFilterBar } from './ReportFilterBar';
 import { Sun, CheckCircle2, Clock, Zap, DollarSign, Users } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
 } from 'recharts';
+
+const CHART_COLORS = [
+  '#3b82f6',
+  '#06b6d4',
+  '#10b981',
+  '#f59e0b',
+  '#8b5cf6',
+  '#ec4899',
+  '#f97316',
+  '#6366f1',
+  '#14b8a6',
+  '#ef4444'
+];
 
 interface ProjectReportProps {
   projects: SolarProject[];
@@ -97,6 +109,12 @@ export const ProjectReport: React.FC<ProjectReportProps> = ({
     });
     return Object.entries(counts).filter(([_, count]) => count > 0 || true).map(([status, count]) => ({ status, count }));
   }, [filteredProjects]);
+
+  const projectStatusShare = useMemo(() => {
+    return statusData
+      .map(d => ({ name: d.status, value: d.count }))
+      .filter(d => d.value > 0);
+  }, [statusData]);
 
   const handleExportCSV = () => {
     const headers = [
@@ -226,30 +244,33 @@ export const ProjectReport: React.FC<ProjectReportProps> = ({
         </div>
       </div>
 
-      {/* Stage Status Chart */}
-      {statusData.length > 0 && (
+      {/* Donut Chart: Project Status Share */}
+      {projectStatusShare.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">EPC Execution Pipeline by Status</h3>
-          <p className="text-xs text-slate-500 mb-4">Distribution of solar power projects by operational milestone</p>
-          <div className="h-60 w-full">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Project Execution Status Share</h3>
+          <p className="text-xs text-slate-500 mb-4">Proportion of active, energized, and milestone-stage EPC solar projects</p>
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis
-                  dataKey="status"
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                  angle={-15}
-                  textAnchor="end"
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+              <PieChart>
+                <Pie
+                  data={projectStatusShare}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {projectStatusShare.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip
                   formatter={(val: any) => [val, 'Projects']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-              </BarChart>
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </div>

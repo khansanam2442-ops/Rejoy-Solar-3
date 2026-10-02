@@ -1340,6 +1340,7 @@ const initialAttendance: AttendanceRecord[] = [
     employeeName: 'Rajesh Kumar',
     date: '2026-09-07',
     checkInTime: '09:05 AM',
+    checkOutTime: '06:15 PM',
     gpsCheckIn: {
       latitude: 22.9868,
       longitude: 72.3789,
@@ -1347,7 +1348,16 @@ const initialAttendance: AttendanceRecord[] = [
     },
     siteProjectId: 'proj-1',
     siteProjectTitle: '100 kW Rooftop Solar - ABC Industries',
-    status: 'FIELD VISIT'
+    status: 'FIELD VISIT',
+    fuelExpense: {
+      initialOdometerReading: 14210,
+      finalOdometerReading: 14258,
+      totalKmDriven: 48,
+      initialOdometerImageName: 'odometer_start_07sep.jpg',
+      finalOdometerImageName: 'odometer_end_07sep.jpg',
+      submittedAt: '2026-09-07T09:05:00Z',
+      updatedAt: '2026-09-07T18:15:00Z'
+    }
   },
   {
     id: 'att-2',
@@ -1355,6 +1365,7 @@ const initialAttendance: AttendanceRecord[] = [
     employeeName: 'Manoj Tiwari',
     date: '2026-09-07',
     checkInTime: '08:50 AM',
+    checkOutTime: '05:45 PM',
     gpsCheckIn: {
       latitude: 22.9869,
       longitude: 72.3790,
@@ -1362,7 +1373,16 @@ const initialAttendance: AttendanceRecord[] = [
     },
     siteProjectId: 'proj-1',
     siteProjectTitle: '100 kW Rooftop Solar - ABC Industries',
-    status: 'FIELD VISIT'
+    status: 'FIELD VISIT',
+    fuelExpense: {
+      initialOdometerReading: 28400,
+      finalOdometerReading: 28435,
+      totalKmDriven: 35,
+      initialOdometerImageName: 'odometer_morning.jpg',
+      finalOdometerImageName: 'odometer_evening.jpg',
+      submittedAt: '2026-09-07T08:50:00Z',
+      updatedAt: '2026-09-07T17:45:00Z'
+    }
   },
   {
     id: 'att-3',

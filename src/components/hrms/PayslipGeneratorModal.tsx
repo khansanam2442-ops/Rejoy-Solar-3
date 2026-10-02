@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Employee, Payslip, AdditionalExpenseItem, DeductionItem } from '../../types/solar';
+import { storageService } from '../../services/storage';
 import {
   X,
   FileText,
@@ -17,7 +18,12 @@ import {
   Building,
   Briefcase,
   DollarSign,
-  CheckCircle2
+  CheckCircle2,
+  Fuel,
+  Gauge,
+  ChevronDown,
+  ChevronUp,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface PayslipGeneratorModalProps {
@@ -86,6 +92,7 @@ export const PayslipGeneratorModal: React.FC<PayslipGeneratorModalProps> = ({
   const [overtimeType, setOvertimeType] = useState<'CALCULATED' | 'DIRECT'>('CALCULATED');
   const [overtimeHours, setOvertimeHours] = useState<number>(0);
   const [overtimeRatePerHour, setOvertimeRatePerHour] = useState<number>(0);
+  const [isOvertimeRateManuallyEdited, setIsOvertimeRateManuallyEdited] = useState<boolean>(false);
   const [directOvertimeAmount, setDirectOvertimeAmount] = useState<number>(0);
 
   // Additional expenses
@@ -94,8 +101,61 @@ export const PayslipGeneratorModal: React.FC<PayslipGeneratorModalProps> = ({
   // Deductions
   const [deductions, setDeductions] = useState<DeductionItem[]>([]);
 
+  // Daily Fuel / Mileage Sync state
+  const [reimbursementRatePerKm, setReimbursementRatePerKm] = useState<number>(5.0);
+  const [isViewingFuelBreakdown, setIsViewingFuelBreakdown] = useState<boolean>(false);
+  const [fuelPreviewModalImg, setFuelPreviewModalImg] = useState<{ url: string; title: string } | null>(null);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Track modal open/session state to initialize form without resetting on user dropdown selection
+  const prevSessionRef = useRef<{
+    isOpen: boolean;
+    payslipId?: string;
+    initialEmpId?: string;
+  }>({ isOpen: false });
+
+  // Month attendance logs matching currentEmployee and salaryMonth
+  const monthNameToNumber: Record<string, string> = useMemo(() => ({
+    january: '01',
+    february: '02',
+    march: '03',
+    april: '04',
+    may: '05',
+    june: '06',
+    july: '07',
+    august: '08',
+    september: '09',
+    october: '10',
+    november: '11',
+    december: '12'
+  }), []);
+
+  const monthAttendanceLogs = useMemo(() => {
+    if (!currentEmployee || !salaryMonth) return [];
+    const [mName, year] = salaryMonth.split(' ');
+    const monthNum = monthNameToNumber[mName?.toLowerCase() || ''];
+    const prefix = monthNum && year ? `${year}-${monthNum}` : '';
+
+    const allAttendance = storageService.getAttendance();
+    return allAttendance.filter(a => {
+      const isEmp = a.employeeId === currentEmployee.id || a.employeeName === currentEmployee.name;
+      const isMonth = prefix ? a.date.startsWith(prefix) : true;
+      return isEmp && isMonth;
+    });
+  }, [currentEmployee, salaryMonth, monthNameToNumber, isOpen]);
+
+  const fuelAttendanceRecords = useMemo(() => {
+    return monthAttendanceLogs.filter(a => a.fuelExpense && (a.fuelExpense.totalKmDriven || 0) > 0);
+  }, [monthAttendanceLogs]);
+
+  const totalFuelKmInMonth = useMemo(() => {
+    return fuelAttendanceRecords.reduce(
+      (sum, a) => sum + (a.fuelExpense?.totalKmDriven || 0),
+      0
+    );
+  }, [fuelAttendanceRecords]);
 
   // Suggested default hourly rate based on base salary: base / 26 working days / 8 hours
   const suggestedHourlyRate = useMemo(() => {
@@ -104,57 +164,95 @@ export const PayslipGeneratorModal: React.FC<PayslipGeneratorModalProps> = ({
     return Math.max(rate, 100);
   }, [currentEmployee]);
 
-  useEffect(() => {
-    if (!isOpen) return;
+  // Handle employee change in create mode: update selected employee and suggested overtime rate (if not manually edited)
+  // while preserving user entered non-employee-specific form data (month, payment mode, expenses, deductions, notes).
+  const handleEmployeeChange = (newEmpId: string) => {
+    setSelectedEmployeeId(newEmpId);
 
-    if (existingPayslip) {
-      setSelectedEmployeeId(existingPayslip.employeeId);
-      setSalaryMonth(existingPayslip.month || 'September 2026');
-      setStatus(existingPayslip.status || 'GENERATED');
-      setPaymentMode(existingPayslip.paymentMode || 'NEFT/RTGS Bank Transfer');
-      setBankReferenceNo(existingPayslip.bankReferenceNo || '');
-      setNotes(existingPayslip.notes || '');
-
-      setOvertimeType(existingPayslip.overtimeType || 'CALCULATED');
-      setOvertimeHours(existingPayslip.overtimeHours ?? 0);
-      setOvertimeRatePerHour(existingPayslip.overtimeRatePerHour ?? suggestedHourlyRate);
-      setDirectOvertimeAmount(existingPayslip.overtimeAmount ?? 0);
-
-      setAdditionalExpenses(
-        existingPayslip.additionalExpenses && existingPayslip.additionalExpenses.length > 0
-          ? [...existingPayslip.additionalExpenses]
-          : []
-      );
-
-      setDeductions(
-        existingPayslip.deductions && existingPayslip.deductions.length > 0
-          ? [...existingPayslip.deductions]
-          : []
-      );
-    } else {
-      const emp = initialEmployee || allEmployees[0];
-      if (emp) {
-        setSelectedEmployeeId(emp.id);
+    if (!isEditing && !isOvertimeRateManuallyEdited) {
+      const newEmp = allEmployees.find(e => e.id === newEmpId);
+      if (newEmp) {
+        const newRate = Math.max(Math.round(newEmp.salaryMonthly / (26 * 8)), 100);
+        setOvertimeRatePerHour(newRate);
       }
-      setSalaryMonth('September 2026');
-      setStatus('GENERATED');
-      setPaymentMode('NEFT/RTGS Bank Transfer');
-      setBankReferenceNo('');
-      setNotes('');
-
-      setOvertimeType('CALCULATED');
-      setOvertimeHours(0);
-      setOvertimeRatePerHour(suggestedHourlyRate);
-      setDirectOvertimeAmount(0);
-
-      // Clean empty rows by default or 1 starter row
-      setAdditionalExpenses([]);
-      setDeductions([
-        { id: `ded-${Date.now()}-1`, description: 'Provident Fund (PF Employee)', amount: 1800 }
-      ]);
     }
-    setErrors({});
-  }, [isOpen, existingPayslip, initialEmployee, allEmployees, suggestedHourlyRate]);
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      prevSessionRef.current = { isOpen: false };
+      return;
+    }
+
+    const prev = prevSessionRef.current;
+    const isNewlyOpened = !prev.isOpen;
+    const isDifferentPayslip = existingPayslip?.id !== prev.payslipId;
+    const isDifferentInitialEmp = initialEmployee?.id !== prev.initialEmpId;
+
+    // Only re-initialize if the modal was just opened or opened for a different payslip / initial employee
+    if (isNewlyOpened || isDifferentPayslip || isDifferentInitialEmp) {
+      prevSessionRef.current = {
+        isOpen: true,
+        payslipId: existingPayslip?.id,
+        initialEmpId: initialEmployee?.id
+      };
+
+      if (existingPayslip) {
+        setSelectedEmployeeId(existingPayslip.employeeId);
+        setSalaryMonth(existingPayslip.month || 'September 2026');
+        setStatus(existingPayslip.status || 'GENERATED');
+        setPaymentMode(existingPayslip.paymentMode || 'NEFT/RTGS Bank Transfer');
+        setBankReferenceNo(existingPayslip.bankReferenceNo || '');
+        setNotes(existingPayslip.notes || '');
+
+        setOvertimeType(existingPayslip.overtimeType || 'CALCULATED');
+        setOvertimeHours(existingPayslip.overtimeHours ?? 0);
+
+        const matchedEmp = allEmployees.find(e => e.id === existingPayslip.employeeId);
+        const defaultRate = matchedEmp ? Math.max(Math.round(matchedEmp.salaryMonthly / (26 * 8)), 100) : 200;
+        setOvertimeRatePerHour(existingPayslip.overtimeRatePerHour ?? defaultRate);
+        setIsOvertimeRateManuallyEdited(existingPayslip.overtimeRatePerHour !== undefined);
+        setDirectOvertimeAmount(existingPayslip.overtimeAmount ?? 0);
+
+        setAdditionalExpenses(
+          existingPayslip.additionalExpenses && existingPayslip.additionalExpenses.length > 0
+            ? [...existingPayslip.additionalExpenses]
+            : []
+        );
+
+        setDeductions(
+          existingPayslip.deductions && existingPayslip.deductions.length > 0
+            ? [...existingPayslip.deductions]
+            : []
+        );
+      } else {
+        const defaultEmp = initialEmployee || allEmployees[0];
+        const targetEmpId = defaultEmp?.id || '';
+        setSelectedEmployeeId(targetEmpId);
+        setSalaryMonth('September 2026');
+        setStatus('GENERATED');
+        setPaymentMode('NEFT/RTGS Bank Transfer');
+        setBankReferenceNo('');
+        setNotes('');
+
+        setOvertimeType('CALCULATED');
+        setOvertimeHours(0);
+
+        const matchedEmp = allEmployees.find(e => e.id === targetEmpId);
+        const defaultRate = matchedEmp ? Math.max(Math.round(matchedEmp.salaryMonthly / (26 * 8)), 100) : 200;
+        setOvertimeRatePerHour(defaultRate);
+        setIsOvertimeRateManuallyEdited(false);
+        setDirectOvertimeAmount(0);
+
+        // Clean empty rows by default or 1 starter row
+        setAdditionalExpenses([]);
+        setDeductions([
+          { id: `ded-${Date.now()}-1`, description: 'Provident Fund (PF Employee)', amount: 1800 }
+        ]);
+      }
+      setErrors({});
+    }
+  }, [isOpen, existingPayslip, initialEmployee, allEmployees]);
 
   // Real-time calculations:
   // Base salary is FIXED and strictly read from currentEmployee.salaryMonthly
@@ -203,6 +301,39 @@ export const PayslipGeneratorModal: React.FC<PayslipGeneratorModalProps> = ({
 
   const handleRemoveExpense = (id: string) => {
     setAdditionalExpenses(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleSyncFuelReimbursement = () => {
+    if (totalFuelKmInMonth <= 0) return;
+
+    const desc = `Daily Fuel & Mileage Reimbursement (${totalFuelKmInMonth} km @ ₹${reimbursementRatePerKm}/km)`;
+    const amount = Math.round(totalFuelKmInMonth * reimbursementRatePerKm);
+
+    setAdditionalExpenses(prev => {
+      const existingIndex = prev.findIndex(item =>
+        item.description.toLowerCase().includes('fuel') ||
+        item.description.toLowerCase().includes('mileage')
+      );
+
+      if (existingIndex >= 0) {
+        const copy = [...prev];
+        copy[existingIndex] = {
+          ...copy[existingIndex],
+          description: desc,
+          amount
+        };
+        return copy;
+      } else {
+        return [
+          ...prev,
+          {
+            id: `exp-fuel-${Date.now()}`,
+            description: desc,
+            amount
+          }
+        ];
+      }
+    });
   };
 
   // Handlers for Deductions
@@ -397,13 +528,15 @@ export const PayslipGeneratorModal: React.FC<PayslipGeneratorModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
               {/* Employee Selection */}
               <div className="sm:col-span-2">
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                <label htmlFor="employee-select" className="block text-[11px] font-bold text-slate-700 mb-1">
                   Employee Details
                 </label>
                 {!isEditing && allEmployees.length > 1 ? (
                   <select
+                    id="employee-select"
+                    aria-label="Select Employee"
                     value={selectedEmployeeId}
-                    onChange={e => setSelectedEmployeeId(e.target.value)}
+                    onChange={e => handleEmployeeChange(e.target.value)}
                     className="w-full text-xs font-semibold border border-slate-200 rounded-xl p-2.5 bg-white focus:ring-2 focus:ring-amber-500"
                   >
                     {allEmployees.map(emp => (
@@ -484,8 +617,21 @@ export const PayslipGeneratorModal: React.FC<PayslipGeneratorModalProps> = ({
                   <span className="text-[11px] font-medium text-slate-500">Suggested Hourly Rate</span>
                   <p className="text-[10px] text-slate-400">Calculated as Base / 26 days / 8 hrs</p>
                 </div>
-                <div className="text-right">
+                <div className="text-right flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-700">₹{suggestedHourlyRate} / hr</span>
+                  {!isEditing && overtimeType === 'CALCULATED' && overtimeRatePerHour !== suggestedHourlyRate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOvertimeRatePerHour(suggestedHourlyRate);
+                        setIsOvertimeRateManuallyEdited(false);
+                      }}
+                      className="text-[10px] font-semibold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                      title="Apply suggested rate to overtime calculation"
+                    >
+                      Apply
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -558,7 +704,10 @@ export const PayslipGeneratorModal: React.FC<PayslipGeneratorModalProps> = ({
                     min="0"
                     step="10"
                     value={overtimeRatePerHour}
-                    onChange={e => setOvertimeRatePerHour(parseFloat(e.target.value) || 0)}
+                    onChange={e => {
+                      setIsOvertimeRateManuallyEdited(true);
+                      setOvertimeRatePerHour(parseFloat(e.target.value) || 0);
+                    }}
                     placeholder={String(suggestedHourlyRate)}
                     className="w-full text-xs font-mono font-bold border border-slate-200 rounded-xl p-2.5 bg-white focus:ring-2 focus:ring-emerald-500"
                   />
@@ -622,6 +771,162 @@ export const PayslipGeneratorModal: React.FC<PayslipGeneratorModalProps> = ({
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Expense Line</span>
               </button>
+            </div>
+
+            {/* Attendance Fuel / Mileage Reimbursement Sync Card */}
+            <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/50 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <Fuel className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                      <span>Daily Fuel & Mileage Attendance Sync</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+                        {totalFuelKmInMonth} km Logged
+                      </span>
+                    </h5>
+                    <p className="text-[10px] text-slate-500">
+                      Calculated from daily field odometer readings submitted by {currentEmployee.name} for {salaryMonth}.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  {totalFuelKmInMonth > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsViewingFuelBreakdown(!isViewingFuelBreakdown)}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <span>{isViewingFuelBreakdown ? 'Hide Trips' : `View ${fuelAttendanceRecords.length} Trip${fuelAttendanceRecords.length !== 1 ? 's' : ''}`}</span>
+                      {isViewingFuelBreakdown ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={totalFuelKmInMonth <= 0}
+                    onClick={handleSyncFuelReimbursement}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:pointer-events-none rounded-xl shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Apply ₹{Math.round(totalFuelKmInMonth * reimbursementRatePerKm).toLocaleString('en-IN')} to Payslip</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Rate Configuration & Quick Metrics */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-amber-200/70 text-xs">
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] font-bold text-slate-700">
+                    Reimbursement Rate:
+                  </label>
+                  <div className="inline-flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-amber-300">
+                    <span className="font-semibold text-slate-500 text-[11px]">₹</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={reimbursementRatePerKm}
+                      onChange={e => setReimbursementRatePerKm(parseFloat(e.target.value) || 0)}
+                      className="w-14 text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
+                    />
+                    <span className="text-[10px] text-slate-400 font-semibold">/ km</span>
+                  </div>
+                  <span className="text-[11px] text-slate-500">
+                    ({totalFuelKmInMonth} km × ₹{reimbursementRatePerKm} = <strong className="text-amber-900 font-bold">₹{Math.round(totalFuelKmInMonth * reimbursementRatePerKm).toLocaleString('en-IN')}</strong>)
+                  </span>
+                </div>
+
+                {totalFuelKmInMonth === 0 && (
+                  <span className="text-[11px] text-slate-400 italic">
+                    No mileage submissions found in attendance records for this month.
+                  </span>
+                )}
+              </div>
+
+              {/* Detailed Day-by-Day Breakdown */}
+              {isViewingFuelBreakdown && totalFuelKmInMonth > 0 && (
+                <div className="mt-2 pt-2 border-t border-amber-200/60 overflow-x-auto">
+                  <table className="w-full text-[11px] text-left">
+                    <thead>
+                      <tr className="border-b border-amber-200 text-slate-500 font-bold">
+                        <th className="pb-1.5 font-bold">Date</th>
+                        <th className="pb-1.5 font-bold">Site / Location</th>
+                        <th className="pb-1.5 font-bold">Start Odo</th>
+                        <th className="pb-1.5 font-bold">End Odo</th>
+                        <th className="pb-1.5 font-bold">KM Driven</th>
+                        <th className="pb-1.5 font-bold text-right">Fuel Claim</th>
+                        <th className="pb-1.5 font-bold text-center">Photos</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-100/60">
+                      {fuelAttendanceRecords.map(rec => {
+                        const km = rec.fuelExpense?.totalKmDriven || 0;
+                        const dayCost = Math.round(km * reimbursementRatePerKm);
+                        return (
+                          <tr key={rec.id} className="hover:bg-amber-100/30">
+                            <td className="py-1.5 font-mono text-slate-700">{rec.date}</td>
+                            <td className="py-1.5 text-slate-600 truncate max-w-[150px]">
+                              {rec.siteLocation || rec.siteProjectTitle || 'Field Visit'}
+                            </td>
+                            <td className="py-1.5 font-mono text-slate-700">
+                              {rec.fuelExpense?.initialOdometerReading !== undefined
+                                ? `${rec.fuelExpense.initialOdometerReading.toLocaleString('en-IN')} km`
+                                : '-'}
+                            </td>
+                            <td className="py-1.5 font-mono text-slate-700">
+                              {rec.fuelExpense?.finalOdometerReading !== undefined
+                                ? `${rec.fuelExpense.finalOdometerReading.toLocaleString('en-IN')} km`
+                                : '-'}
+                            </td>
+                            <td className="py-1.5 font-mono font-bold text-emerald-800">
+                              {km} km
+                            </td>
+                            <td className="py-1.5 font-mono font-bold text-slate-900 text-right">
+                              ₹{dayCost.toLocaleString('en-IN')}
+                            </td>
+                            <td className="py-1.5 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {rec.fuelExpense?.initialOdometerImageUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setFuelPreviewModalImg({
+                                      url: rec.fuelExpense!.initialOdometerImageUrl!,
+                                      title: `Start Odometer (${rec.date})`
+                                    })}
+                                    className="p-1 rounded-md text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer"
+                                    title="View Start Odometer Photo"
+                                  >
+                                    <ImageIcon className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {rec.fuelExpense?.finalOdometerImageUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setFuelPreviewModalImg({
+                                      url: rec.fuelExpense!.finalOdometerImageUrl!,
+                                      title: `End Odometer (${rec.date})`
+                                    })}
+                                    className="p-1 rounded-md text-orange-700 hover:bg-orange-100 transition-colors cursor-pointer"
+                                    title="View End Odometer Photo"
+                                  >
+                                    <ImageIcon className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {!rec.fuelExpense?.initialOdometerImageUrl && !rec.fuelExpense?.finalOdometerImageUrl && (
+                                  <span className="text-[10px] text-slate-400">None</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             {/* Quick Add Presets */}
@@ -937,6 +1242,48 @@ export const PayslipGeneratorModal: React.FC<PayslipGeneratorModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Odometer Photo Verification Preview Modal */}
+      {fuelPreviewModalImg && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in"
+        >
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+              <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-amber-600" />
+                <span>{fuelPreviewModalImg.title}</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setFuelPreviewModalImg(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+                aria-label="Close photo preview"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-slate-900/5 max-h-[70vh] overflow-auto">
+              <img
+                src={fuelPreviewModalImg.url}
+                alt={fuelPreviewModalImg.title}
+                className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm"
+              />
+            </div>
+            <div className="p-3 bg-white border-t border-slate-100 text-right">
+              <button
+                type="button"
+                onClick={() => setFuelPreviewModalImg(null)}
+                className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

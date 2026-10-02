@@ -6,13 +6,25 @@ import { ReportFilterBar } from './ReportFilterBar';
 import { IndianRupee, CheckCircle2, Clock, AlertCircle, TrendingUp } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
 } from 'recharts';
+
+const CHART_COLORS = [
+  '#10b981',
+  '#3b82f6',
+  '#f59e0b',
+  '#8b5cf6',
+  '#ec4899',
+  '#06b6d4',
+  '#f97316',
+  '#6366f1',
+  '#14b8a6',
+  '#e11d48'
+];
 
 interface IncomeSummaryReportProps {
   payments: PaymentRecord[];
@@ -92,6 +104,12 @@ export const IncomeSummaryReport: React.FC<IncomeSummaryReportProps> = ({
     });
     return Object.values(map).sort((a, b) => a.month.localeCompare(b.month));
   }, [filteredPayments]);
+
+  const monthlyInflowShare = useMemo(() => {
+    return monthlyInflows
+      .map(d => ({ name: d.month, value: d.amount }))
+      .filter(d => d.value > 0);
+  }, [monthlyInflows]);
 
   const handleExportCSV = () => {
     const headers = [
@@ -188,28 +206,33 @@ export const IncomeSummaryReport: React.FC<IncomeSummaryReportProps> = ({
         </div>
       </div>
 
-      {/* Monthly Chart */}
-      {monthlyInflows.length > 0 && (
+      {/* Donut Chart: Monthly Realized Inflow Share */}
+      {monthlyInflowShare.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">Monthly Inflow Realization (Cash Receipts)</h3>
-          <p className="text-xs text-slate-500 mb-4">Real-time collections deposited into company bank accounts</p>
-          <div className="h-60 w-full">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Monthly Realized Inflow Share</h3>
+          <p className="text-xs text-slate-500 mb-4">Proportion of cleared cash receipts deposited into company accounts across months</p>
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyInflows} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#64748b' }}
-                  tickFormatter={val => `₹${(val / 100000).toFixed(1)}L`}
-                  axisLine={false}
-                  tickLine={false}
-                />
+              <PieChart>
+                <Pie
+                  data={monthlyInflowShare}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {monthlyInflowShare.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip
-                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Amount Realized']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Realized Inflow']}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="amount" fill="#10b981" radius={[6, 6, 0, 0]} />
-              </BarChart>
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </div>

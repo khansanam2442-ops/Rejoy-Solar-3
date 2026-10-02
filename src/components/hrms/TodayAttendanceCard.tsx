@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { storageService } from '../../services/storage';
-import { AttendanceRecord } from '../../types/solar';
+import { AttendanceRecord, DailyFuelExpense } from '../../types/solar';
 import {
   Play,
   Square,
@@ -15,7 +15,17 @@ import {
   ArrowRight,
   Sun,
   ShieldCheck,
-  Check
+  Check,
+  Fuel,
+  Gauge,
+  Camera,
+  UploadCloud,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Image as ImageIcon,
+  ExternalLink,
+  X
 } from 'lucide-react';
 
 interface TodayAttendanceCardProps {
@@ -129,6 +139,124 @@ export const TodayAttendanceCard: React.FC<TodayAttendanceCardProps> = ({
   // Live elapsed time ticker when in 'WORKING' state
   const [elapsedDurationText, setElapsedDurationText] = useState('');
 
+  // Daily Fuel / Mileage Log state
+  const [initialOdo, setInitialOdo] = useState<string>('');
+  const [finalOdo, setFinalOdo] = useState<string>('');
+  const [initialOdoImg, setInitialOdoImg] = useState<string>('');
+  const [initialOdoImgName, setInitialOdoImgName] = useState<string>('');
+  const [finalOdoImg, setFinalOdoImg] = useState<string>('');
+  const [finalOdoImgName, setFinalOdoImgName] = useState<string>('');
+  const [isFuelSectionOpen, setIsFuelSectionOpen] = useState<boolean>(true);
+  const [previewModalImg, setPreviewModalImg] = useState<{ url: string; title: string } | null>(null);
+  const [fuelError, setFuelError] = useState<string | null>(null);
+
+  // Sync state with today's attendance record
+  useEffect(() => {
+    if (todayRecord?.fuelExpense) {
+      const fe = todayRecord.fuelExpense;
+      setInitialOdo(fe.initialOdometerReading !== undefined ? String(fe.initialOdometerReading) : '');
+      setFinalOdo(fe.finalOdometerReading !== undefined ? String(fe.finalOdometerReading) : '');
+      setInitialOdoImg(fe.initialOdometerImageUrl || '');
+      setInitialOdoImgName(fe.initialOdometerImageName || '');
+      setFinalOdoImg(fe.finalOdometerImageUrl || '');
+      setFinalOdoImgName(fe.finalOdometerImageName || '');
+    } else {
+      setInitialOdo('');
+      setFinalOdo('');
+      setInitialOdoImg('');
+      setInitialOdoImgName('');
+      setFinalOdoImg('');
+      setFinalOdoImgName('');
+    }
+    setFuelError(null);
+  }, [todayRecord]);
+
+  // Real-time calculation of KM driven
+  const calculatedKm = useMemo(() => {
+    const init = parseFloat(initialOdo);
+    const fin = parseFloat(finalOdo);
+    if (!isNaN(init) && !isNaN(fin) && fin >= init) {
+      return parseFloat((fin - init).toFixed(1));
+    }
+    return null;
+  }, [initialOdo, finalOdo]);
+
+  // Handle uploading / capturing odometer photo
+  const handleUploadOdoPhoto = (e: React.ChangeEvent<HTMLInputElement>, type: 'INITIAL' | 'FINAL') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setFuelError('Photo exceeds the 5 MB limit. Please select a smaller photo.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      if (type === 'INITIAL') {
+        setInitialOdoImg(dataUrl);
+        setInitialOdoImgName(file.name);
+      } else {
+        setFinalOdoImg(dataUrl);
+        setFinalOdoImgName(file.name);
+      }
+      setFuelError(null);
+    };
+    reader.onerror = () => {
+      setFuelError('Failed to read image file.');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Direct save/update for fuel log
+  const handleSaveFuelLog = () => {
+    if (!todayRecord) {
+      showToast('Please start work first before logging fuel readings.', 'info');
+      return;
+    }
+
+    const init = initialOdo.trim() ? parseFloat(initialOdo) : undefined;
+    const fin = finalOdo.trim() ? parseFloat(finalOdo) : undefined;
+
+    if (init !== undefined && fin !== undefined && fin < init) {
+      setFuelError('Final odometer reading cannot be less than initial reading.');
+      return;
+    }
+
+    const kmDriven = (init !== undefined && fin !== undefined && fin >= init)
+      ? parseFloat((fin - init).toFixed(1))
+      : undefined;
+
+    const fuelExpense: DailyFuelExpense = {
+      initialOdometerReading: init,
+      finalOdometerReading: fin,
+      totalKmDriven: kmDriven,
+      initialOdometerImageUrl: initialOdoImg || undefined,
+      initialOdometerImageName: initialOdoImgName || undefined,
+      finalOdometerImageUrl: finalOdoImg || undefined,
+      finalOdometerImageName: finalOdoImgName || undefined,
+      submittedAt: todayRecord.fuelExpense?.submittedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const updated: AttendanceRecord = {
+      ...todayRecord,
+      fuelExpense
+    };
+
+    storageService.saveAttendanceRecord(updated);
+    triggerRefresh();
+    setFuelError(null);
+    showToast(
+      kmDriven !== undefined
+        ? `Daily fuel log saved: ${kmDriven} km recorded for payroll reimbursement! 🚗`
+        : 'Daily odometer readings saved!',
+      'success'
+    );
+  };
+
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -217,6 +345,14 @@ export const TodayAttendanceCard: React.FC<TodayAttendanceCardProps> = ({
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
 
+      const init = initialOdo.trim() ? parseFloat(initialOdo) : undefined;
+      const fuelExpense: DailyFuelExpense | undefined = (init !== undefined || initialOdoImg) ? {
+        initialOdometerReading: init,
+        initialOdometerImageUrl: initialOdoImg || undefined,
+        initialOdometerImageName: initialOdoImgName || undefined,
+        submittedAt: new Date().toISOString()
+      } : undefined;
+
       const newRecord: AttendanceRecord = {
         id: `att-${Date.now()}`,
         employeeId: currentUser?.id || 'emp-user',
@@ -230,7 +366,8 @@ export const TodayAttendanceCard: React.FC<TodayAttendanceCardProps> = ({
           locationName: gpsCoords.locationName
         },
         siteLocation: gpsCoords.locationName || 'Live GPS Punch In',
-        status: 'PRESENT'
+        status: 'PRESENT',
+        fuelExpense
       };
 
       storageService.saveAttendanceRecord(newRecord);
@@ -283,6 +420,24 @@ export const TodayAttendanceCard: React.FC<TodayAttendanceCardProps> = ({
         todayStr
       );
 
+      const init = initialOdo.trim() ? parseFloat(initialOdo) : todayRecord.fuelExpense?.initialOdometerReading;
+      const fin = finalOdo.trim() ? parseFloat(finalOdo) : undefined;
+      const kmDriven = (init !== undefined && fin !== undefined && fin >= init)
+        ? parseFloat((fin - init).toFixed(1))
+        : todayRecord.fuelExpense?.totalKmDriven;
+
+      const fuelExpense: DailyFuelExpense | undefined = (init !== undefined || fin !== undefined || initialOdoImg || finalOdoImg) ? {
+        ...todayRecord.fuelExpense,
+        initialOdometerReading: init,
+        initialOdometerImageUrl: initialOdoImg || todayRecord.fuelExpense?.initialOdometerImageUrl,
+        initialOdometerImageName: initialOdoImgName || todayRecord.fuelExpense?.initialOdometerImageName,
+        finalOdometerReading: fin,
+        finalOdometerImageUrl: finalOdoImg || todayRecord.fuelExpense?.finalOdometerImageUrl,
+        finalOdometerImageName: finalOdoImgName || todayRecord.fuelExpense?.finalOdometerImageName,
+        totalKmDriven: kmDriven,
+        updatedAt: new Date().toISOString()
+      } : todayRecord.fuelExpense;
+
       const updatedRecord: AttendanceRecord = {
         ...todayRecord,
         checkOutTime: timeStr,
@@ -293,7 +448,8 @@ export const TodayAttendanceCard: React.FC<TodayAttendanceCardProps> = ({
           locationName: gpsCoords.locationName
         },
         totalHours: decimalHours,
-        totalDurationText: durationText
+        totalDurationText: durationText,
+        fuelExpense
       };
 
       storageService.saveAttendanceRecord(updatedRecord);
@@ -546,6 +702,298 @@ export const TodayAttendanceCard: React.FC<TodayAttendanceCardProps> = ({
             </div>
           )}
         </>
+      )}
+
+      {/* ========================================================================= */}
+      {/* Daily Fuel Expenses & Mileage Reimbursement Log                           */}
+      {/* ========================================================================= */}
+      <div className="mt-6 pt-5 border-t border-slate-200 select-none">
+        <div className="bg-linear-to-b from-amber-50/50 to-orange-50/20 rounded-2xl border border-amber-200/90 p-4 sm:p-5 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                <Fuel className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                  <span>Daily Fuel & Mileage Log</span>
+                  {calculatedKm !== null && (
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
+                      <span>🚗 {calculatedKm} km driven</span>
+                    </span>
+                  )}
+                  {todayRecord?.fuelExpense?.totalKmDriven && calculatedKm === null && (
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
+                      <span>🚗 {todayRecord.fuelExpense.totalKmDriven} km recorded</span>
+                    </span>
+                  )}
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Record vehicle odometer readings with photo verification for HR travel reimbursement.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsFuelSectionOpen(!isFuelSectionOpen)}
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-amber-100/50 rounded-lg transition-colors cursor-pointer"
+              aria-label={isFuelSectionOpen ? 'Collapse Fuel Log' : 'Expand Fuel Log'}
+            >
+              {isFuelSectionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {isFuelSectionOpen && (
+            <div className="space-y-4 pt-1 animate-in fade-in">
+              {/* Odometer Inputs Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Morning / Initial Odometer Card */}
+                <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Gauge className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Start of Shift (Morning)</span>
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Start Odo</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                      Initial Reading (km)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={initialOdo}
+                      onChange={e => {
+                        setInitialOdo(e.target.value);
+                        setFuelError(null);
+                      }}
+                      placeholder="e.g. 14210"
+                      className="w-full text-xs font-mono font-bold border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  {/* Initial Photo upload / preview */}
+                  <div>
+                    <span className="block text-[11px] font-medium text-slate-600 mb-1">
+                      Start Odometer Photo
+                    </span>
+                    {initialOdoImg ? (
+                      <div className="flex items-center justify-between gap-2 p-2 bg-slate-50 border border-slate-200 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewModalImg({ url: initialOdoImg, title: 'Start Odometer Photo' })}
+                          className="flex items-center gap-2 text-left min-w-0 group cursor-pointer"
+                        >
+                          <img
+                            src={initialOdoImg}
+                            alt="Start Odometer"
+                            className="w-9 h-9 object-cover rounded-lg border border-slate-200 group-hover:opacity-80 transition-opacity shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <span className="text-[11px] font-bold text-slate-800 truncate block group-hover:text-amber-600 transition-colors">
+                              {initialOdoImgName || 'start_odometer.jpg'}
+                            </span>
+                            <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
+                              <ExternalLink className="w-2.5 h-2.5" />
+                              <span>View Photo</span>
+                            </span>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInitialOdoImg('');
+                            setInitialOdoImgName('');
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          aria-label="Remove start photo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center gap-2 p-2.5 border border-dashed border-slate-300 hover:border-amber-400 bg-slate-50 hover:bg-amber-50/50 rounded-xl text-xs font-semibold text-slate-600 hover:text-amber-800 transition-colors cursor-pointer">
+                        <Camera className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Upload Morning Photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={e => handleUploadOdoPhoto(e, 'INITIAL')}
+                          className="sr-only"
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                {/* Evening / Final Odometer Card */}
+                <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Gauge className="w-3.5 h-3.5 text-orange-600" />
+                      <span>End of Shift (Evening)</span>
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">End Odo</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                      Final Reading (km)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={finalOdo}
+                      onChange={e => {
+                        setFinalOdo(e.target.value);
+                        setFuelError(null);
+                      }}
+                      placeholder="e.g. 14258"
+                      className="w-full text-xs font-mono font-bold border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  {/* Final Photo upload / preview */}
+                  <div>
+                    <span className="block text-[11px] font-medium text-slate-600 mb-1">
+                      End Odometer Photo
+                    </span>
+                    {finalOdoImg ? (
+                      <div className="flex items-center justify-between gap-2 p-2 bg-slate-50 border border-slate-200 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewModalImg({ url: finalOdoImg, title: 'End Odometer Photo' })}
+                          className="flex items-center gap-2 text-left min-w-0 group cursor-pointer"
+                        >
+                          <img
+                            src={finalOdoImg}
+                            alt="End Odometer"
+                            className="w-9 h-9 object-cover rounded-lg border border-slate-200 group-hover:opacity-80 transition-opacity shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <span className="text-[11px] font-bold text-slate-800 truncate block group-hover:text-amber-600 transition-colors">
+                              {finalOdoImgName || 'end_odometer.jpg'}
+                            </span>
+                            <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
+                              <ExternalLink className="w-2.5 h-2.5" />
+                              <span>View Photo</span>
+                            </span>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFinalOdoImg('');
+                            setFinalOdoImgName('');
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          aria-label="Remove end photo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center gap-2 p-2.5 border border-dashed border-slate-300 hover:border-orange-400 bg-slate-50 hover:bg-orange-50/50 rounded-xl text-xs font-semibold text-slate-600 hover:text-orange-800 transition-colors cursor-pointer">
+                        <Camera className="w-3.5 h-3.5 text-orange-600" />
+                        <span>Upload Evening Photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={e => handleUploadOdoPhoto(e, 'FINAL')}
+                          className="sr-only"
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {fuelError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-800 font-medium">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{fuelError}</span>
+                </div>
+              )}
+
+              {/* Dynamic Calculation Strip & Actions */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white rounded-xl border border-amber-200">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-600">
+                    {calculatedKm !== null ? (
+                      <span className="text-slate-900 font-medium">
+                        Total Distance: <strong className="font-mono text-emerald-700 text-sm">{calculatedKm} km</strong>
+                        <span className="text-slate-400 ml-2">(@ ₹5.00/km standard: ~₹{Math.round(calculatedKm * 5)})</span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 italic">
+                        Enter both initial and final odometer readings to calculate daily mileage.
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                {todayRecord && (
+                  <button
+                    type="button"
+                    onClick={handleSaveFuelLog}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-2xs transition-colors cursor-pointer self-end sm:self-auto shrink-0"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Fuel Log</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Odometer Photo Preview Modal */}
+      {previewModalImg && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in"
+        >
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+              <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-amber-600" />
+                <span>{previewModalImg.title}</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setPreviewModalImg(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+                aria-label="Close photo preview"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-slate-900/5 max-h-[70vh] overflow-auto">
+              <img
+                src={previewModalImg.url}
+                alt={previewModalImg.title}
+                className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm"
+              />
+            </div>
+            <div className="p-3 bg-white border-t border-slate-100 text-right">
+              <button
+                type="button"
+                onClick={() => setPreviewModalImg(null)}
+                className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

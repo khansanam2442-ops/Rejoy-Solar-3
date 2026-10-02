@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Employee, UserRole, UserProfile } from '../../types/solar';
+import React, { useState, useEffect, useRef } from 'react';
+import { Employee, UserRole, UserProfile, EmployeeDocument, EmployeeDocumentCategory } from '../../types/solar';
 import {
   X,
   UserPlus,
@@ -19,7 +19,13 @@ import {
   EyeOff,
   Sparkles,
   CheckCircle2,
-  RotateCcw
+  RotateCcw,
+  FileText,
+  UploadCloud,
+  Download,
+  ExternalLink,
+  Trash2,
+  FileCheck
 } from 'lucide-react';
 import { validateEmployee, DuplicateRecordError } from '../../services/validation';
 import { provisionEmployeeAccount, updateEmployeeAccount } from '../../services/adminAuthService';
@@ -103,6 +109,102 @@ function generateSecurePassword(): string {
   return pass;
 }
 
+const DOCUMENT_CATEGORIES: EmployeeDocumentCategory[] = [
+  'Offer Letter',
+  'Termination Letter',
+  'Employment Contract',
+  'ID Proof',
+  'Address Proof',
+  'Certificate',
+  'Salary Document',
+  'Other'
+];
+
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/jpg',
+  'image/png'
+];
+
+const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+function isFileTypeAllowed(file: File): boolean {
+  if (file.type && ALLOWED_MIME_TYPES.includes(file.type.toLowerCase())) {
+    return true;
+  }
+  const name = file.name.toLowerCase();
+  return ALLOWED_EXTENSIONS.some(ext => name.endsWith(ext));
+}
+
+function getMimeType(file: File): string {
+  if (file.type) return file.type;
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.pdf')) return 'application/pdf';
+  if (name.endsWith('.doc')) return 'application/msword';
+  if (name.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+  if (name.endsWith('.png')) return 'image/png';
+  return 'application/octet-stream';
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function formatUploadDate(isoString: string): string {
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch {
+    return isoString;
+  }
+}
+
+function getCategoryBadgeClass(category: EmployeeDocumentCategory): string {
+  switch (category) {
+    case 'Offer Letter':
+      return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+    case 'Termination Letter':
+      return 'bg-rose-50 text-rose-800 border-rose-200';
+    case 'Employment Contract':
+      return 'bg-blue-50 text-blue-800 border-blue-200';
+    case 'ID Proof':
+      return 'bg-purple-50 text-purple-800 border-purple-200';
+    case 'Address Proof':
+      return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+    case 'Certificate':
+      return 'bg-teal-50 text-teal-800 border-teal-200';
+    case 'Salary Document':
+      return 'bg-amber-50 text-amber-800 border-amber-200';
+    case 'Other':
+    default:
+      return 'bg-slate-100 text-slate-700 border-slate-200';
+  }
+}
+
+function getFileIcon(mimeType: string, fileName: string) {
+  if (mimeType.startsWith('image/') || /\.(jpg|jpeg|png)$/i.test(fileName)) {
+    return <Image className="w-4 h-4 text-sky-600 shrink-0" />;
+  }
+  if (mimeType === 'application/pdf' || /\.pdf$/i.test(fileName)) {
+    return <FileText className="w-4 h-4 text-rose-600 shrink-0" />;
+  }
+  return <FileCheck className="w-4 h-4 text-blue-600 shrink-0" />;
+}
+
 export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   isOpen,
   onClose,
@@ -141,6 +243,14 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const [shouldResetPassword, setShouldResetPassword] = useState<boolean>(false);
   const [passwordGeneratedTip, setPasswordGeneratedTip] = useState<string | null>(null);
 
+  // HR Documents state
+  const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
+  const [docCategory, setDocCategory] = useState<EmployeeDocumentCategory>('Offer Letter');
+  const [docNotes, setDocNotes] = useState<string>('');
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -170,6 +280,9 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
       );
       setAccountStatus(employeeToEdit.accountStatus || 'ACTIVE');
       setShouldResetPassword(false);
+
+      // Populate documents
+      setDocuments(Array.isArray(employeeToEdit.documents) ? [...employeeToEdit.documents] : []);
     } else {
       // Suggest next employee code
       const nextNum = existingEmployees.length + 101;
@@ -192,6 +305,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
       setSystemRole('Site Survey Engineer');
       setAccountStatus('ACTIVE');
       setShouldResetPassword(false);
+      setDocuments([]);
     }
 
     // Always clear passwords when modal opens or target changes
@@ -200,6 +314,9 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
     setShowPassword(false);
     setShowConfirmPassword(false);
     setPasswordGeneratedTip(null);
+    setDocCategory('Offer Letter');
+    setDocNotes('');
+    setUploadErrors([]);
     setErrors({});
   }, [employeeToEdit, isOpen, existingEmployees.length]);
 
@@ -225,6 +342,128 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
     setConfirmPassword(generated);
     setShowPassword(true);
     setPasswordGeneratedTip(`Password generated: ${generated}. Copy this credential and share it with the employee.`);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const currentErrors: string[] = [];
+    const validFiles: File[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!isFileTypeAllowed(file)) {
+        currentErrors.push(`"${file.name}" has an unsupported format. Please upload PDF, DOC, DOCX, JPG, or PNG files only.`);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        currentErrors.push(`"${file.name}" exceeds the 5 MB file size limit (${(file.size / (1024 * 1024)).toFixed(2)} MB).`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length > 0) {
+      setIsUploading(true);
+      try {
+        const readPromises = validFiles.map(file => {
+          return new Promise<EmployeeDocument>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const dataUrl = reader.result as string;
+              const newDoc: EmployeeDocument = {
+                id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                name: file.name.replace(/\.[^/.]+$/, '') || file.name,
+                category: docCategory,
+                fileName: file.name,
+                mimeType: getMimeType(file),
+                fileSize: file.size,
+                fileUrl: dataUrl,
+                uploadedAt: new Date().toISOString(),
+                uploadedBy: currentUser?.name || 'HR Administrator',
+                notes: docNotes.trim() || undefined
+              };
+              resolve(newDoc);
+            };
+            reader.onerror = () => {
+              reject(new Error(`Failed to read file: ${file.name}`));
+            };
+            reader.readAsDataURL(file);
+          });
+        });
+
+        const newDocs = await Promise.all(readPromises);
+        setDocuments(prev => [...prev, ...newDocs]);
+        setDocNotes('');
+      } catch (err) {
+        currentErrors.push(err instanceof Error ? err.message : 'Failed to read uploaded file(s).');
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    }
+
+    setUploadErrors(currentErrors);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveDocument = (id: string) => {
+    setDocuments(prev => prev.filter(d => d.id !== id));
+  };
+
+  const handleViewDocument = (doc: EmployeeDocument) => {
+    const isImage = doc.mimeType.startsWith('image/');
+    const isPdf = doc.mimeType === 'application/pdf' || doc.fileName.toLowerCase().endsWith('.pdf');
+
+    if (isImage || isPdf) {
+      try {
+        if (doc.fileUrl.startsWith('data:')) {
+          const parts = doc.fileUrl.split(',');
+          const mime = parts[0]?.match(/:(.*?);/)?.[1] || doc.mimeType;
+          const base64Data = parts[1];
+          if (base64Data) {
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Uint8Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const blob = new Blob([byteNumbers], { type: mime });
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not open blob URL, falling back to direct link', err);
+      }
+      const link = document.createElement('a');
+      link.href = doc.fileUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      // DOC, DOCX, or other files: trigger file download
+      const link = document.createElement('a');
+      link.href = doc.fileUrl;
+      link.download = doc.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   if (!isOpen) return null;
@@ -389,6 +628,10 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
         accountStatus: loginEnabled ? accountStatus : 'DISABLED',
         accountCreatedAt: employeeToEdit?.accountCreatedAt || (loginEnabled ? new Date().toISOString() : undefined),
         accountCreatedBy: employeeToEdit?.accountCreatedBy || (loginEnabled ? (currentUser?.name || 'System Administrator') : undefined),
+
+        // HR Documents
+        documents: documents,
+
         updatedAt: new Date().toISOString()
       };
 
@@ -877,6 +1120,189 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                 placeholder="https://images.unsplash.com/..."
                 className="w-full text-xs border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               />
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* SECTION: HR Documents & Records                                          */}
+          {/* ========================================================================= */}
+          <div className="mt-4 pt-4 border-t border-slate-200">
+            <div className="p-4 rounded-xl border border-blue-200 bg-linear-to-b from-blue-50/40 to-slate-50/50 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                      <span>HR Documents</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 inline-flex items-center gap-1">
+                        <span>{documents.length} {documents.length === 1 ? 'Record' : 'Records'}</span>
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Upload employee-related HR records, including offer letters, termination letters, contracts, and supporting documents.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload Controls Box */}
+              <div className="p-3.5 bg-white rounded-xl border border-blue-200/80 shadow-2xs space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Document Category <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={docCategory}
+                      onChange={e => setDocCategory(e.target.value as EmployeeDocumentCategory)}
+                      className="w-full text-xs border border-slate-200 rounded-xl p-2.5 bg-white font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      {DOCUMENT_CATEGORIES.map(cat => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Short Note / Remarks <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={docNotes}
+                      onChange={e => setDocNotes(e.target.value)}
+                      placeholder="e.g. Signed joining agreement, PAN copy, degree"
+                      className="w-full text-xs border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Upload Trigger Input */}
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    id="hr-employee-documents-upload"
+                    multiple
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png"
+                    onChange={handleFileChange}
+                    className="sr-only"
+                  />
+                  <label
+                    htmlFor="hr-employee-documents-upload"
+                    className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/20 hover:bg-blue-50/50 rounded-xl cursor-pointer transition-colors group"
+                  >
+                    <div className="flex items-center gap-2 text-blue-700 font-bold text-xs group-hover:text-blue-800">
+                      <UploadCloud className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>{isUploading ? 'Reading selected file(s)...' : 'Choose File(s) or Drag & Drop to Upload'}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Accepts PDF, DOC, DOCX, JPG, and PNG files up to 5 MB each.
+                    </p>
+                  </label>
+                </div>
+
+                {/* Inline Upload Errors */}
+                {uploadErrors.length > 0 && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-rose-700">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      <span>Document Upload Notice:</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-700 pl-1">
+                      {uploadErrors.map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Uploaded Documents List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-800 px-0.5">
+                  <span>Attached Documents ({documents.length})</span>
+                </div>
+
+                {documents.length === 0 ? (
+                  <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-center text-xs text-slate-500">
+                    No HR documents attached yet. Select a category above and choose files to upload.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {documents.map((doc) => {
+                      const isWordDoc = doc.fileName.toLowerCase().endsWith('.doc') || doc.fileName.toLowerCase().endsWith('.docx') || doc.mimeType.includes('word');
+                      return (
+                        <div
+                          key={doc.id}
+                          className="p-3 bg-white rounded-xl border border-slate-200 hover:border-slate-300 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
+                        >
+                          <div className="flex items-start gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 mt-0.5">
+                              {getFileIcon(doc.mimeType, doc.fileName)}
+                            </div>
+                            <div className="min-w-0 space-y-0.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${getCategoryBadgeClass(doc.category)}`}>
+                                  {doc.category}
+                                </span>
+                                <span className="text-xs font-bold text-slate-900 truncate max-w-[220px]" title={doc.fileName}>
+                                  {doc.fileName}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500 flex-wrap">
+                                <span>{formatUploadDate(doc.uploadedAt)}</span>
+                                <span>•</span>
+                                <span>{formatFileSize(doc.fileSize)}</span>
+                                {doc.uploadedBy && (
+                                  <>
+                                    <span>•</span>
+                                    <span>Uploaded by {doc.uploadedBy}</span>
+                                  </>
+                                )}
+                              </div>
+                              {doc.notes && (
+                                <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-100 rounded-md px-2 py-1 mt-1 font-sans">
+                                  <span className="font-semibold text-slate-500">Note: </span>
+                                  {doc.notes}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                            <button
+                              type="button"
+                              onClick={() => handleViewDocument(doc)}
+                              aria-label={`${isWordDoc ? 'Download' : 'View'} ${doc.fileName}`}
+                              title={isWordDoc ? 'Download Document' : 'View Document'}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
+                            >
+                              {isWordDoc ? <Download className="w-3.5 h-3.5" /> : <ExternalLink className="w-3.5 h-3.5" />}
+                              <span>{isWordDoc ? 'Download' : 'View'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDocument(doc.id)}
+                              aria-label={`Remove ${doc.fileName}`}
+                              title="Remove Document"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Remove</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

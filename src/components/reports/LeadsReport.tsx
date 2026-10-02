@@ -6,13 +6,23 @@ import { ReportFilterBar } from './ReportFilterBar';
 import { UserCheck, Zap, DollarSign, Target, Award } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
 } from 'recharts';
+
+const CHART_COLORS = [
+  '#3b82f6',
+  '#06b6d4',
+  '#8b5cf6',
+  '#f59e0b',
+  '#f97316',
+  '#eab308',
+  '#10b981',
+  '#ef4444'
+];
 
 interface LeadsReportProps {
   leads: Lead[];
@@ -88,6 +98,12 @@ export const LeadsReport: React.FC<LeadsReportProps> = ({
       count
     }));
   }, [filteredLeads]);
+
+  const leadStageShare = useMemo(() => {
+    return stageData
+      .map(d => ({ name: d.stage, value: d.count }))
+      .filter(d => d.value > 0);
+  }, [stageData]);
 
   const handleExportCSV = () => {
     const headers = [
@@ -208,30 +224,33 @@ export const LeadsReport: React.FC<LeadsReportProps> = ({
         </div>
       </div>
 
-      {/* Funnel Stage Chart */}
-      {stageData.length > 0 && (
+      {/* Donut Chart: Lead Stage Share */}
+      {leadStageShare.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">CRM Sales Pipeline Breakdown</h3>
-          <p className="text-xs text-slate-500 mb-4">Volume of leads transitioning through sales stages</p>
-          <div className="h-60 w-full">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Lead Pipeline Stage Share</h3>
+          <p className="text-xs text-slate-500 mb-4">Proportion of opportunities across pipeline milestones from discovery to won contracts</p>
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stageData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis
-                  dataKey="stage"
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                  angle={-15}
-                  textAnchor="end"
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+              <PieChart>
+                <Pie
+                  data={leadStageShare}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {leadStageShare.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip
                   formatter={(val: any) => [val, 'Leads in Stage']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="count" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-              </BarChart>
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </div>

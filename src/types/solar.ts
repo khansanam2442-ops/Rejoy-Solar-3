@@ -441,6 +441,29 @@ export interface ExpenseRecord {
   tallySyncStatus: 'NOT SYNCED' | 'SYNCING' | 'SYNCED' | 'FAILED';
 }
 
+export type EmployeeDocumentCategory =
+  | 'Offer Letter'
+  | 'Termination Letter'
+  | 'Employment Contract'
+  | 'ID Proof'
+  | 'Address Proof'
+  | 'Certificate'
+  | 'Salary Document'
+  | 'Other';
+
+export interface EmployeeDocument {
+  id: string;
+  name: string;
+  category: EmployeeDocumentCategory;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  fileUrl: string; // Data URL for client-side storage
+  uploadedAt: string;
+  uploadedBy?: string;
+  notes?: string;
+}
+
 export interface Employee {
   id: string;
   employeeCode: string;
@@ -465,7 +488,22 @@ export interface Employee {
   accountCreatedAt?: string;
   accountCreatedBy?: string;
 
+  // HR Documents
+  documents?: EmployeeDocument[];
+
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DailyFuelExpense {
+  initialOdometerReading?: number;
+  finalOdometerReading?: number;
+  totalKmDriven?: number;
+  initialOdometerImageUrl?: string;
+  finalOdometerImageUrl?: string;
+  initialOdometerImageName?: string;
+  finalOdometerImageName?: string;
+  submittedAt?: string;
   updatedAt?: string;
 }
 
@@ -473,6 +511,9 @@ export interface AttendanceRecord {
   id: string;
   employeeId: string;
   employeeName: string;
+  authUid?: string;
+  employeeCode?: string;
+  employeeEmail?: string;
   date: string;
   checkInTime: string;
   checkOutTime?: string;
@@ -502,6 +543,7 @@ export interface AttendanceRecord {
     longitude: number;
     locationName: string;
   };
+  fuelExpense?: DailyFuelExpense;
 }
 
 export interface AdditionalExpenseItem {

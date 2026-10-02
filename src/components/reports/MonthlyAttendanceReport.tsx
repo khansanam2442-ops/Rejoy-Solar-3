@@ -6,13 +6,20 @@ import { ReportFilterBar } from './ReportFilterBar';
 import { CalendarCheck, MapPin, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
 } from 'recharts';
+
+const CHART_COLORS = [
+  '#10b981', // Present (Emerald)
+  '#3b82f6', // Field Visit (Blue)
+  '#f59e0b', // Late (Amber)
+  '#f97316', // Half Day (Orange)
+  '#ef4444'  // Absent (Rose/Red)
+];
 
 interface MonthlyAttendanceReportProps {
   attendance: AttendanceRecord[];
@@ -90,6 +97,12 @@ export const MonthlyAttendanceReport: React.FC<MonthlyAttendanceReportProps> = (
     });
     return Object.entries(map).map(([status, count]) => ({ status, count }));
   }, [filteredAttendance]);
+
+  const attendanceStatusShare = useMemo(() => {
+    return chartData
+      .map(d => ({ name: d.status, value: d.count }))
+      .filter(d => d.value > 0);
+  }, [chartData]);
 
   const handleExportCSV = () => {
     const headers = [
@@ -206,23 +219,33 @@ export const MonthlyAttendanceReport: React.FC<MonthlyAttendanceReportProps> = (
         </div>
       </div>
 
-      {/* Attendance Distribution Chart */}
-      {chartData.length > 0 && (
+      {/* Donut Chart: Attendance Status Share */}
+      {attendanceStatusShare.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">Attendance Distribution</h3>
-          <p className="text-xs text-slate-500 mb-4">Breakdown by status category across active team members</p>
-          <div className="h-56 w-full">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Attendance Status Share</h3>
+          <p className="text-xs text-slate-500 mb-4">Proportion of logs across present, field visits, late arrivals, and leaves</p>
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="status" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+              <PieChart>
+                <Pie
+                  data={attendanceStatusShare}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {attendanceStatusShare.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip
-                  formatter={(val: any) => [val, 'Count']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                  formatter={(val: any) => [val, 'Logs Count']}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
-              </BarChart>
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </div>

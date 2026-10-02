@@ -6,13 +6,25 @@ import { ReportFilterBar } from './ReportFilterBar';
 import { DollarSign, FileText, CheckCircle2, Clock, AlertCircle, TrendingUp } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
 } from 'recharts';
+
+const CHART_COLORS = [
+  '#f59e0b',
+  '#3b82f6',
+  '#10b981',
+  '#8b5cf6',
+  '#ec4899',
+  '#06b6d4',
+  '#f97316',
+  '#6366f1',
+  '#14b8a6',
+  '#e11d48'
+];
 
 interface SalesReportProps {
   invoices: SalesInvoice[];
@@ -78,6 +90,12 @@ export const SalesReport: React.FC<SalesReportProps> = ({
     });
     return Object.values(map).sort((a, b) => a.month.localeCompare(b.month));
   }, [filteredInvoices]);
+
+  const monthlyRevenueShare = useMemo(() => {
+    return monthlyData
+      .map(d => ({ name: d.month, value: d.total }))
+      .filter(d => d.value > 0);
+  }, [monthlyData]);
 
   const handleExportCSV = () => {
     const headers = [
@@ -200,28 +218,33 @@ export const SalesReport: React.FC<SalesReportProps> = ({
         </div>
       </div>
 
-      {/* Chart */}
-      {monthlyData.length > 0 && (
+      {/* Donut Chart: Monthly Invoiced Revenue Share */}
+      {monthlyRevenueShare.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">Invoiced Revenue Trend (Monthly)</h3>
-          <p className="text-xs text-slate-500 mb-4">Total billing value in INR over invoice cycles</p>
-          <div className="h-60 w-full">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Monthly Invoiced Revenue Share</h3>
+          <p className="text-xs text-slate-500 mb-4">Proportional distribution of billing value in INR across months</p>
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#64748b' }}
-                  tickFormatter={val => `₹${(val / 1000).toFixed(0)}k`}
-                  axisLine={false}
-                  tickLine={false}
-                />
+              <PieChart>
+                <Pie
+                  data={monthlyRevenueShare}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {monthlyRevenueShare.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip
-                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Sales Invoiced']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Invoiced Value']}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="total" name="Invoice Value" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-              </BarChart>
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </div>

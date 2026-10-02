@@ -4,6 +4,14 @@ import { ReportFilterState, ReportCategoryMeta } from '../../types/reports';
 import { exportToCSV } from '../../services/exportImport';
 import { ReportFilterBar } from './ReportFilterBar';
 import { Building2, ChevronDown, ChevronRight, CheckCircle2, Clock, DollarSign } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
+} from 'recharts';
 
 interface VendorLedgerReportProps {
   vendors: Vendor[];
@@ -109,6 +117,13 @@ export const VendorLedgerReport: React.FC<VendorLedgerReportProps> = ({
   const totalProcurement = filteredLedger.reduce((sum, l) => sum + l.totalBilled, 0);
   const pendingVendorsCount = filteredLedger.filter(l => l.balanceDue > 0).length;
 
+  const vendorSummaryChartData = useMemo(() => {
+    return [
+      { name: 'Disbursed / Paid Amount', value: totalDisbursed, color: '#10b981' },
+      { name: 'Balance Due / Payables', value: totalPayablesDue, color: '#f59e0b' }
+    ].filter(d => d.value > 0);
+  }, [totalDisbursed, totalPayablesDue]);
+
   const handleExportCSV = () => {
     const headers = [
       'Vendor Name',
@@ -203,6 +218,38 @@ export const VendorLedgerReport: React.FC<VendorLedgerReportProps> = ({
           <p className="text-[11px] text-slate-500 mt-0.5">With pending invoices</p>
         </div>
       </div>
+
+      {/* Donut Chart: Paid vs Balance-Due Amount */}
+      {vendorSummaryChartData.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Supplier Ledger: Disbursed vs Pending Payables</h3>
+          <p className="text-xs text-slate-500 mb-4">Proportion of procurement invoices paid out vs current unsettled balance due</p>
+          <div className="h-64 sm:h-72 w-full flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={vendorSummaryChartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {vendorSummaryChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Amount']}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Vendor Ledger Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
